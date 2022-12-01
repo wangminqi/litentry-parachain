@@ -476,7 +476,7 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 						}
 					},
 					Ok(None) => {
-						log::warn!("not found from key: {:?}", key);
+						warn!("not found from key: {:?}", key);
 					},
 					Err(_) => {},
 				}
