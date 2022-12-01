@@ -466,7 +466,8 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 				) {
 					Ok(Some(value)) => {
 						if value.mr_enclave.to_vec() == mrenclave && value.url == trusted_url {
-							// enclave is already registered, we should reset the nonce_cache
+							// After calling the perform_ra function, the nonce will be incremented by 1,
+							// so enclave is already registered, we should reset the nonce_cache
 							enclave
 								.set_nonce(nonce)
 								.expect("Could not set nonce of enclave. Returning here...");
