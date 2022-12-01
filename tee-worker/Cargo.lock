@@ -15,7 +15,7 @@ dependencies = [
 [[package]]
 name = "ac-compose-macros"
 version = "0.1.0"
-source = "git+https://github.com/scs/substrate-api-client.git?branch=polkadot-v0.9.29#80e6d6daeb1ac8a4ce4968951bb2a4832fb054c0"
+source = "git+https://github.com/litentry/substrate-api-client.git?branch=tungstenite-polkadot-v0.9.29#6dafb3fa5005bc452d69a749e99831a62d29d8b0"
 dependencies = [
  "ac-primitives",
  "log 0.4.17",
@@ -29,7 +29,7 @@ dependencies = [
 [[package]]
 name = "ac-node-api"
 version = "0.1.0"
-source = "git+https://github.com/scs/substrate-api-client.git?branch=polkadot-v0.9.29#80e6d6daeb1ac8a4ce4968951bb2a4832fb054c0"
+source = "git+https://github.com/litentry/substrate-api-client.git?branch=tungstenite-polkadot-v0.9.29#6dafb3fa5005bc452d69a749e99831a62d29d8b0"
 dependencies = [
  "ac-primitives",
  "derive_more",
@@ -52,7 +52,7 @@ dependencies = [
 [[package]]
 name = "ac-primitives"
 version = "0.1.0"
-source = "git+https://github.com/scs/substrate-api-client.git?branch=polkadot-v0.9.29#80e6d6daeb1ac8a4ce4968951bb2a4832fb054c0"
+source = "git+https://github.com/litentry/substrate-api-client.git?branch=tungstenite-polkadot-v0.9.29#6dafb3fa5005bc452d69a749e99831a62d29d8b0"
 dependencies = [
  "hex 0.4.3",
  "parity-scale-codec",
@@ -14260,7 +14260,7 @@ dependencies = [
 [[package]]
 name = "substrate-api-client"
 version = "0.6.0"
-source = "git+https://github.com/scs/substrate-api-client.git?branch=polkadot-v0.9.29#80e6d6daeb1ac8a4ce4968951bb2a4832fb054c0"
+source = "git+https://github.com/litentry/substrate-api-client.git?branch=tungstenite-polkadot-v0.9.29#6dafb3fa5005bc452d69a749e99831a62d29d8b0"
 dependencies = [
  "ac-compose-macros",
  "ac-node-api",
@@ -14283,6 +14283,8 @@ dependencies = [
  "sp-std",
  "sp-version",
  "thiserror 1.0.37",
+ "tungstenite 0.18.0",
+ "url 2.3.1",
  "ws",
 ]
 
@@ -15083,6 +15085,26 @@ dependencies = [
  "log 0.4.17",
  "rand 0.8.5",
  "sha-1 0.10.0",
+ "thiserror 1.0.37",
+ "url 2.3.1",
+ "utf-8 0.7.6",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30ee6ab729cd4cf0fd55218530c4522ed30b7b6081752839b68fcec8d0960788"
+dependencies = [
+ "base64 0.13.1",
+ "byteorder 1.4.3",
+ "bytes 1.3.0",
+ "http 0.2.8",
+ "httparse 1.8.0",
+ "log 0.4.17",
+ "native-tls",
+ "rand 0.8.5",
+ "sha1 0.10.5",
  "thiserror 1.0.37",
  "url 2.3.1",
  "utf-8 0.7.6",

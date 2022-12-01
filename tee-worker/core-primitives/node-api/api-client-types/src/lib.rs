@@ -50,7 +50,7 @@ mod api {
 	use super::ParentchainExtrinsicParams;
 	use substrate_api_client::Api;
 
-	pub use substrate_api_client::{rpc::WsRpcClient, ApiClientError};
+	pub use substrate_api_client::{rpc::TungsteniteRpcClient as WsRpcClient, ApiClientError};
 
 	pub type ParentchainApi = Api<sp_core::sr25519::Pair, WsRpcClient, ParentchainExtrinsicParams>;
 }
