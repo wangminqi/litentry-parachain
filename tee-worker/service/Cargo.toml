@@ -56,7 +56,7 @@ its-storage = { path = "../sidechain/storage" }
 
 # scs / integritee
 my-node-runtime = { package = "rococo-parachain-runtime", path = "../../runtime/rococo" }
-substrate-api-client = { git = "https://github.com/litentry/substrate-api-client.git", branch = "tungstenite-polkadot-v0.9.29" }
+substrate-api-client = { git = "https://github.com/litentry/substrate-api-client.git", branch = "new-tungstenite-polkadot-v0.9.29" }
 teerex-primitives = { git = "https://github.com/integritee-network/pallets.git", branch = "master" }
 
 # Substrate dependencies

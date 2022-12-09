@@ -15,7 +15,7 @@ dependencies = [
 [[package]]
 name = "ac-compose-macros"
 version = "0.1.0"
-source = "git+https://github.com/litentry/substrate-api-client.git?branch=tungstenite-polkadot-v0.9.29#43158b4536cc6057fea4ccc5192fb4d80cddde01"
+source = "git+https://github.com/litentry/substrate-api-client.git?branch=new-tungstenite-polkadot-v0.9.29#c42ac67070033af32a9dd0db196d68f38b0ad8a2"
 dependencies = [
  "ac-primitives",
  "log 0.4.17",
@@ -29,7 +29,7 @@ dependencies = [
 [[package]]
 name = "ac-node-api"
 version = "0.1.0"
-source = "git+https://github.com/litentry/substrate-api-client.git?branch=tungstenite-polkadot-v0.9.29#43158b4536cc6057fea4ccc5192fb4d80cddde01"
+source = "git+https://github.com/litentry/substrate-api-client.git?branch=new-tungstenite-polkadot-v0.9.29#c42ac67070033af32a9dd0db196d68f38b0ad8a2"
 dependencies = [
  "ac-primitives",
  "derive_more",
@@ -52,7 +52,7 @@ dependencies = [
 [[package]]
 name = "ac-primitives"
 version = "0.1.0"
-source = "git+https://github.com/litentry/substrate-api-client.git?branch=tungstenite-polkadot-v0.9.29#43158b4536cc6057fea4ccc5192fb4d80cddde01"
+source = "git+https://github.com/litentry/substrate-api-client.git?branch=new-tungstenite-polkadot-v0.9.29#c42ac67070033af32a9dd0db196d68f38b0ad8a2"
 dependencies = [
  "hex 0.4.3",
  "parity-scale-codec",
@@ -14260,7 +14260,7 @@ dependencies = [
 [[package]]
 name = "substrate-api-client"
 version = "0.6.0"
-source = "git+https://github.com/litentry/substrate-api-client.git?branch=tungstenite-polkadot-v0.9.29#43158b4536cc6057fea4ccc5192fb4d80cddde01"
+source = "git+https://github.com/litentry/substrate-api-client.git?branch=new-tungstenite-polkadot-v0.9.29#c42ac67070033af32a9dd0db196d68f38b0ad8a2"
 dependencies = [
  "ac-compose-macros",
  "ac-node-api",

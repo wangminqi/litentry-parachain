@@ -26,7 +26,7 @@ itp-top-pool-author = { path = "../top-pool-author", default-features = false }
 itp-types = { path = "../types", default-features = false }
 
 # scs
-substrate-api-client = { default-features = false, git = "https://github.com/litentry/substrate-api-client.git", branch = "tungstenite-polkadot-v0.9.29" }
+substrate-api-client = { default-features = false, git = "https://github.com/litentry/substrate-api-client.git", branch = "new-tungstenite-polkadot-v0.9.29" }
 
 # sgx enabled external libraries
 thiserror_sgx = { optional = true, package = "thiserror", git = "https://github.com/mesalock-linux/thiserror-sgx", tag = "sgx_1.1.3" }
