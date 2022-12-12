@@ -158,11 +158,14 @@ export async function listenEncryptedEvents(
 ) {
     return new Promise<{ eventData: HexString[] }>(async (resolve, reject) => {
         let startBlock = 0;
-        let timeout = 10; // 10 block number timeout
+        const slotDuration = await context.substrate.call.auraApi.slotDuration()
+        const timeout = 3 * 60 * 1000; // 3 min
+        let maximumWaitingBlock = timeout / parseInt(slotDuration.toString());
+        console.log('maximumWaitingBlock', maximumWaitingBlock)
         const unsubscribe = await context.substrate.rpc.chain.subscribeNewHeads(async (header) => {
             const currentBlockNumber = header.number.toNumber();
             if (startBlock == 0) startBlock = currentBlockNumber;
-            if (currentBlockNumber > startBlock + timeout) {
+            if (currentBlockNumber > startBlock + maximumWaitingBlock) {
                 reject("timeout");
                 return;
             }
