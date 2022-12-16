@@ -49,7 +49,7 @@ impl NodeApiFactory {
 
 impl CreateNodeApi for NodeApiFactory {
 	fn create_api(&self) -> Result<ParentchainApi> {
-		ParentchainApi::new(WsRpcClient::new(self.node_url.as_str(), u8::MAX))
+		ParentchainApi::new(WsRpcClient::new(self.node_url.as_str()))
 			.map_err(NodeApiFactoryError::FailedToCreateNodeApi)
 			.map(|a| a.set_signer(self.signer.clone()))
 	}
