@@ -23,12 +23,14 @@ use itc_parentchain::{
 };
 use itp_enclave_api::{enclave_base::EnclaveBase, sidechain::Sidechain};
 use itp_node_api::api_client::ChainApi;
-use itp_types::SignedBlock;
+use itp_types::RuntimeConfigCollection;
 use log::*;
 use my_node_runtime::Header;
+use serde::de::DeserializeOwned;
 use sp_finality_grandpa::VersionedAuthorityList;
-use sp_runtime::traits::Header as HeaderTrait;
-use std::{cmp::min, sync::Arc};
+use sp_runtime::traits::{Block, Header as HeaderTrait};
+use std::{cmp::min, marker::PhantomData, sync::Arc};
+use substrate_api_client::{FromHexString, GetHeader};
 
 const BLOCK_SYNC_BATCH_SIZE: u32 = 1000;
 
@@ -54,23 +56,43 @@ pub trait HandleParentchain {
 }
 
 /// Handles the interaction between parentchain and enclave.
-pub(crate) struct ParentchainHandler<ParentchainApi: ChainApi, EnclaveApi: Sidechain> {
+pub(crate) struct ParentchainHandler<ParentchainApi, EnclaveApi, Runtime>
+where
+	ParentchainApi: ChainApi<Runtime>,
+	EnclaveApi: Sidechain,
+	Runtime: RuntimeConfigCollection,
+	Runtime::Hash: FromHexString,
+	Runtime::Header: DeserializeOwned,
+	Runtime::RuntimeBlock: DeserializeOwned,
+	<Runtime::RuntimeBlock as sp_runtime::traits::Block>::Header: Into<Header>,
+{
 	parentchain_api: ParentchainApi,
 	enclave_api: Arc<EnclaveApi>,
 	parentchain_init_params: ParentchainInitParams,
+	_phantom: PhantomData<Runtime>,
 }
 
-impl<ParentchainApi, EnclaveApi> ParentchainHandler<ParentchainApi, EnclaveApi>
+impl<ParentchainApi, EnclaveApi, Runtime> ParentchainHandler<ParentchainApi, EnclaveApi, Runtime>
 where
-	ParentchainApi: ChainApi,
+	ParentchainApi: ChainApi<Runtime> + GetHeader<Runtime::Hash, Header = Runtime::Header>,
+	Runtime: RuntimeConfigCollection,
 	EnclaveApi: Sidechain + EnclaveBase,
+	Runtime::Hash: FromHexString,
+	Runtime::Header: DeserializeOwned,
+	Runtime::RuntimeBlock: DeserializeOwned,
+	<Runtime::RuntimeBlock as sp_runtime::traits::Block>::Header: Into<Header>,
 {
 	pub fn new(
 		parentchain_api: ParentchainApi,
 		enclave_api: Arc<EnclaveApi>,
 		parentchain_init_params: ParentchainInitParams,
 	) -> Self {
-		Self { parentchain_api, enclave_api, parentchain_init_params }
+		Self {
+			parentchain_api,
+			enclave_api,
+			parentchain_init_params,
+			_phantom: PhantomData::default(),
+		}
 	}
 
 	// FIXME: Necessary in the future? Fix with #1080
@@ -111,11 +133,16 @@ where
 	}
 }
 
-impl<ParentchainApi, EnclaveApi> HandleParentchain
-	for ParentchainHandler<ParentchainApi, EnclaveApi>
+impl<ParentchainApi, EnclaveApi, Runtime> HandleParentchain
+	for ParentchainHandler<ParentchainApi, EnclaveApi, Runtime>
 where
-	ParentchainApi: ChainApi,
+	ParentchainApi: ChainApi<Runtime>,
 	EnclaveApi: Sidechain + EnclaveBase,
+	Runtime: RuntimeConfigCollection,
+	Runtime::Hash: FromHexString,
+	Runtime::Header: DeserializeOwned,
+	Runtime::RuntimeBlock: DeserializeOwned,
+	<Runtime::RuntimeBlock as sp_runtime::traits::Block>::Header: Into<Header>,
 {
 	fn init_parentchain_components(&self) -> ServiceResult<Header> {
 		Ok(self
@@ -125,17 +152,18 @@ where
 
 	fn sync_parentchain(&self, last_synced_header: Header) -> ServiceResult<Header> {
 		trace!("Getting current head");
-		let curr_block: SignedBlock = self
+		let curr_block = self
 			.parentchain_api
 			.last_finalized_block()?
 			.ok_or(Error::MissingLastFinalizedBlock)?;
-		let curr_block_number = curr_block.block.header.number;
+		let curr_block_header: Header = curr_block.block.header().clone().into();
+		let curr_block_number = curr_block_header.number();
 
 		let mut until_synced_header = last_synced_header;
 		loop {
 			let block_chunk_to_sync = self.parentchain_api.get_blocks(
 				until_synced_header.number + 1,
-				min(until_synced_header.number + BLOCK_SYNC_BATCH_SIZE, curr_block_number),
+				min(until_synced_header.number + BLOCK_SYNC_BATCH_SIZE, curr_block_number.clone()),
 			)?;
 			println!("[+] Found {} block(s) to sync", block_chunk_to_sync.len());
 			if block_chunk_to_sync.is_empty() {
@@ -146,7 +174,7 @@ where
 
 			until_synced_header = block_chunk_to_sync
 				.last()
-				.map(|b| b.block.header.clone())
+				.map(|b| b.block.header().clone().into())
 				.ok_or(Error::EmptyChunk)?;
 			println!(
 				"Synced {} out of {} finalized parentchain blocks",

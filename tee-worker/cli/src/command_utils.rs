@@ -20,7 +20,7 @@ use base58::FromBase58;
 use itc_rpc_client::direct_client::{DirectApi, DirectClient as DirectWorkerApi};
 use itp_node_api::api_client::{ParentchainApi, WsRpcClient};
 use log::*;
-use my_node_runtime::{AccountId, Signature};
+use my_node_runtime::{AccountId, Runtime, Signature};
 use sgx_crypto_helper::rsa3072::Rsa3072PubKey;
 use sp_application_crypto::sr25519;
 use sp_core::{crypto::Ss58Codec, Pair};
@@ -37,10 +37,10 @@ pub(crate) fn get_shielding_key(cli: &Cli) -> Result<Rsa3072PubKey, String> {
 	worker_api_direct.get_rsa_pubkey().map_err(|e| e.to_string())
 }
 
-pub(crate) fn get_chain_api(cli: &Cli) -> ParentchainApi {
+pub(crate) fn get_chain_api(cli: &Cli) -> ParentchainApi<Runtime> {
 	let url = format!("{}:{}", cli.node_url, cli.node_port);
 	info!("connecting to {}", url);
-	ParentchainApi::new(WsRpcClient::new(&url)).unwrap()
+	ParentchainApi::<Runtime>::new(WsRpcClient::new(&url, 100).unwrap()).unwrap()
 }
 
 pub(crate) fn get_accountid_from_str(account: &str) -> AccountId {

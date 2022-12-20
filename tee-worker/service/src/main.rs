@@ -64,27 +64,24 @@ use itp_settings::{
 	files::SIDECHAIN_STORAGE_PATH,
 	worker_mode::{ProvideWorkerMode, WorkerMode, WorkerModeProvider},
 };
+use itp_types::RuntimeConfigCollection;
 use its_peer_fetch::{
 	block_fetch_client::BlockFetcher, untrusted_peer_fetch::UntrustedPeerFetcher,
 };
 use its_primitives::types::block::SignedBlock as SignedSidechainBlock;
 use its_storage::{interface::FetchBlocks, BlockPruner, SidechainStorageLock};
 use log::*;
-use my_node_runtime::{Hash, Header, RuntimeEvent};
+use my_node_runtime::{Hash, Header, Runtime, RuntimeEvent};
+use serde::de::DeserializeOwned;
 use sgx_types::*;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use sp_keyring::AccountKeyring;
-use std::{
-	path::PathBuf,
-	str,
-	sync::{
-		mpsc::{channel, Sender},
-		Arc,
-	},
-	thread,
-	time::Duration,
+use sp_runtime::traits::Header as HeaderTrait;
+use std::{path::PathBuf, str, sync::Arc, thread, time::Duration};
+use substrate_api_client::{
+	rpc::HandleSubscription, utils::FromHexString, GetHeader, SubmitAndWatch, SubscribeChain,
+	SubscribeFrameSystem, XtStatus,
 };
-use substrate_api_client::{utils::FromHexString, Header as HeaderTrait, XtStatus};
 use teerex_primitives::ShardIdentifier;
 
 mod account_funding;
@@ -110,7 +107,7 @@ mod worker_peers_updater;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub type EnclaveWorker =
-	Worker<Config, NodeApiFactory, Enclave, InitializationHandler<WorkerModeProvider>>;
+	Worker<Config, NodeApiFactory, Enclave, InitializationHandler<WorkerModeProvider>, Runtime>;
 
 fn main() {
 	// Setup logging
@@ -163,22 +160,24 @@ fn main() {
 	let sync_block_broadcaster =
 		Arc::new(SyncBlockBroadcaster::new(tokio_handle.clone(), worker.clone()));
 	let peer_updater = Arc::new(WorkerPeersUpdater::new(worker));
-	let untrusted_peer_fetcher = UntrustedPeerFetcher::new(node_api_factory.clone());
+	let untrusted_peer_fetcher = UntrustedPeerFetcher::<_, Runtime>::new(node_api_factory.clone());
 	let peer_sidechain_block_fetcher =
 		Arc::new(BlockFetcher::<SignedSidechainBlock, _>::new(untrusted_peer_fetcher));
 	let enclave_metrics_receiver = Arc::new(EnclaveMetricsReceiver {});
 
 	// initialize o-call bridge with a concrete factory implementation
-	OCallBridge::initialize(Arc::new(OCallBridgeComponentFactory::new(
-		node_api_factory.clone(),
-		sync_block_broadcaster,
-		enclave.clone(),
-		sidechain_blockstorage.clone(),
-		peer_updater,
-		peer_sidechain_block_fetcher,
-		tokio_handle.clone(),
-		enclave_metrics_receiver,
-	)));
+	OCallBridge::initialize(Arc::new(
+		OCallBridgeComponentFactory::<_, _, _, _, _, _, _, _, Runtime>::new(
+			node_api_factory.clone(),
+			sync_block_broadcaster,
+			enclave.clone(),
+			sidechain_blockstorage.clone(),
+			peer_updater,
+			peer_sidechain_block_fetcher,
+			tokio_handle.clone(),
+			enclave_metrics_receiver,
+		),
+	));
 
 	if let Some(run_config) = &config.run_config {
 		let shard = extract_shard(&run_config.shard, enclave.as_ref());
@@ -193,7 +192,7 @@ fn main() {
 			node_api_factory.create_api().expect("Failed to create parentchain node API");
 
 		if run_config.request_state {
-			sync_state::sync_state::<_, _, WorkerModeProvider>(
+			sync_state::sync_state::<_, _, WorkerModeProvider, Runtime>(
 				&node_api,
 				&shard,
 				enclave.as_ref(),
@@ -201,7 +200,7 @@ fn main() {
 			);
 		}
 
-		start_worker::<_, _, _, _, WorkerModeProvider>(
+		start_worker::<_, _, _, _, WorkerModeProvider, Runtime>(
 			config,
 			&shard,
 			enclave,
@@ -214,7 +213,7 @@ fn main() {
 		println!("*** Requesting state from a registered worker \n");
 		let node_api =
 			node_api_factory.create_api().expect("Failed to create parentchain node API");
-		sync_state::sync_state::<_, _, WorkerModeProvider>(
+		sync_state::sync_state::<_, _, WorkerModeProvider, Runtime>(
 			&node_api,
 			&extract_shard(&smatches.value_of("shard").map(|s| s.to_string()), enclave.as_ref()),
 			enclave.as_ref(),
@@ -272,12 +271,12 @@ fn main() {
 
 /// FIXME: needs some discussion (restructuring?)
 #[allow(clippy::too_many_arguments)]
-fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
+fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider, Runtime>(
 	config: Config,
 	shard: &ShardIdentifier,
 	enclave: Arc<E>,
 	sidechain_storage: Arc<D>,
-	node_api: ParentchainApi,
+	node_api: ParentchainApi<Runtime>,
 	tokio_handle_getter: Arc<T>,
 	initialization_handler: Arc<InitializationHandler>,
 ) where
@@ -293,6 +292,11 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	D: BlockPruner + FetchBlocks<SignedSidechainBlock> + Sync + Send + 'static,
 	InitializationHandler: TrackInitialization + IsInitialized + Sync + Send + 'static,
 	WorkerModeProvider: ProvideWorkerMode,
+	Runtime: RuntimeConfigCollection + Sync + Send,
+	Runtime::Hash: FromHexString,
+	Runtime::Header: DeserializeOwned,
+	Runtime::RuntimeBlock: DeserializeOwned,
+	<Runtime::RuntimeBlock as sp_runtime::traits::Block>::Header: Into<Header>,
 {
 	let run_config = config.run_config.clone().expect("Run config missing");
 	let skip_ra = run_config.skip_ra;
@@ -401,7 +405,7 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	// ------------------------------------------------------------------------
 	// Init parentchain specific stuff. Needed for parentchain communication.
 	let parentchain_handler = Arc::new(
-		ParentchainHandler::new_with_automatic_light_client_allocation(
+		ParentchainHandler::<_, _, Runtime>::new_with_automatic_light_client_allocation(
 			node_api.clone(),
 			enclave.clone(),
 		)
@@ -414,9 +418,9 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 		.set_nonce(nonce)
 		.expect("Could not set nonce of enclave. Returning here...");
 
-	let metadata = node_api.metadata.clone();
-	let runtime_spec_version = node_api.runtime_version.spec_version;
-	let runtime_transaction_version = node_api.runtime_version.transaction_version;
+	let metadata = node_api.metadata().clone();
+	let runtime_spec_version = node_api.runtime_version().spec_version;
+	let runtime_transaction_version = node_api.runtime_version().transaction_version;
 	enclave
 		.set_node_metadata(
 			NodeMetadata::new(metadata, runtime_spec_version, runtime_transaction_version).encode(),
@@ -451,7 +455,9 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	}
 
 	println!("[>] Register the enclave (send the extrinsic)");
-	let register_enclave_xt_hash = node_api.send_extrinsic(xthex, XtStatus::Finalized).unwrap();
+	let register_enclave_xt_hash = node_api
+		.submit_and_watch_extrinsic_until(xthex.as_str(), XtStatus::Finalized)
+		.unwrap();
 	println!("[<] Extrinsic got finalized. Hash: {:?}\n", register_enclave_xt_hash);
 
 	let register_enclave_xt_header =
@@ -531,23 +537,15 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	// ------------------------------------------------------------------------
 	// subscribe to events and react on firing
 	println!("*** Subscribing to events");
-	let (sender, receiver) = channel();
-	let sender2 = sender.clone();
-	let _eventsubscriber = thread::Builder::new()
-		.name("eventsubscriber".to_owned())
-		.spawn(move || {
-			node_api.subscribe_events(sender2).unwrap();
-		})
-		.unwrap();
-
+	let mut subscription = node_api.subscribe_system_events().unwrap();
 	println!("[+] Subscribed to events. waiting...");
-	let timeout = Duration::from_millis(10);
 	loop {
-		if let Ok(msg) = receiver.recv_timeout(timeout) {
-			if let Ok(events) = parse_events(msg.clone()) {
-				print_events(events, sender.clone())
-			}
-		}
+		let event_bytes = subscription.next().unwrap().unwrap().changes[0].1.clone().unwrap().0;
+		let events = Vec::<frame_system::EventRecord<RuntimeEvent, Hash>>::decode(
+			&mut event_bytes.as_slice(),
+		)
+		.unwrap();
+		print_events(events);
 	}
 }
 
@@ -555,12 +553,13 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 /// the parentchain (TEEREX WorkerForShard). This is the pre-requisite to be
 /// considered initialized and ready for the next worker to start (in sidechain mode only).
 /// considered initialized and ready for the next worker to start.
-fn spawn_worker_for_shard_polling<InitializationHandler>(
+fn spawn_worker_for_shard_polling<InitializationHandler, Runtime>(
 	shard: &ShardIdentifier,
-	node_api: ParentchainApi,
+	node_api: ParentchainApi<Runtime>,
 	initialization_handler: Arc<InitializationHandler>,
 ) where
 	InitializationHandler: TrackInitialization + Sync + Send + 'static,
+	Runtime: RuntimeConfigCollection,
 {
 	let shard_for_initialized = *shard;
 	thread::spawn(move || {
@@ -587,7 +586,7 @@ fn parse_events(event: String) -> Result<Events, String> {
 	Events::decode(&mut _er_enc).map_err(|_| "Decoding Events Failed".to_string())
 }
 
-fn print_events(events: Events, _sender: Sender<String>) {
+fn print_events(events: Events) {
 	for evr in &events {
 		debug!("Decoded: phase = {:?}, event = {:?}", evr.phase, evr.event);
 		match &evr.event {
@@ -714,30 +713,40 @@ fn print_events(events: Events, _sender: Sender<String>) {
 
 /// Subscribe to the node API finalized heads stream and trigger a parent chain sync
 /// upon receiving a new header.
-fn subscribe_to_parentchain_new_headers<E: EnclaveBase + Sidechain>(
-	parentchain_handler: Arc<ParentchainHandler<ParentchainApi, E>>,
+fn subscribe_to_parentchain_new_headers<
+	E: EnclaveBase + Sidechain,
+	Runtime: RuntimeConfigCollection,
+>(
+	parentchain_handler: Arc<ParentchainHandler<ParentchainApi<Runtime>, E, Runtime>>,
 	mut last_synced_header: Header,
-) -> Result<(), Error> {
-	let (sender, receiver) = channel();
+) -> Result<(), Error>
+where
+	Runtime::Hash: FromHexString,
+	Runtime::Header: DeserializeOwned,
+	Runtime::RuntimeBlock: DeserializeOwned,
+	<Runtime::RuntimeBlock as sp_runtime::traits::Block>::Header: Into<Header>,
+{
 	//TODO: this should be implemented by parentchain_handler directly, and not via
 	// exposed parentchain_api. Blocked by https://github.com/scs/substrate-api-client/issues/267.
-	parentchain_handler
+	let mut subscription = parentchain_handler
 		.parentchain_api()
-		.subscribe_finalized_heads(sender)
+		.subscribe_finalized_heads()
 		.map_err(Error::ApiClient)?;
 
 	loop {
-		let new_header: Header = match receiver.recv() {
-			Ok(header_str) => serde_json::from_str(&header_str).map_err(Error::Serialization),
-			Err(e) => Err(Error::ApiSubscriptionDisconnected(e)),
+		match subscription.next() {
+			None => Ok(()),
+			Some(Ok(new_header)) => {
+				// let new_header :Header = serde_json::from_str(&header_str).map_err(Error::Serialization)?;
+				println!(
+					"[+] Received finalized header update ({}), syncing parent chain...",
+					new_header.number
+				);
+				last_synced_header = parentchain_handler.sync_parentchain(last_synced_header)?;
+				Ok(())
+			},
+			Some(Err(e)) => Err(Error::ApiClient(e.into())),
 		}?;
-
-		println!(
-			"[+] Received finalized header update ({}), syncing parent chain...",
-			new_header.number
-		);
-
-		last_synced_header = parentchain_handler.sync_parentchain(last_synced_header)?;
 	}
 }
 
@@ -749,8 +758,8 @@ fn enclave_account<E: EnclaveBase>(enclave_api: &E) -> AccountId32 {
 }
 
 /// Checks if we are the first validateer to register on the parentchain.
-fn we_are_primary_validateer(
-	node_api: &ParentchainApi,
+fn we_are_primary_validateer<Runtime: RuntimeConfigCollection>(
+	node_api: &ParentchainApi<Runtime>,
 	register_enclave_xt_header: &Header,
 ) -> Result<bool, Error> {
 	let enclave_count_of_previous_block =

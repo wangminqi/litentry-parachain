@@ -17,9 +17,13 @@
 
 use crate::error::{Error, Result};
 use itc_rpc_client::direct_client::{DirectApi, DirectClient as DirectWorkerApi};
-use itp_node_api::{api_client::PalletTeerexApi, node_api_factory::CreateNodeApi};
+use itp_node_api::{
+	api_client::{PalletTeerexApi, PlainTip},
+	node_api_factory::CreateNodeApi,
+};
+use itp_types::RuntimeConfigCollection;
 use its_primitives::types::ShardIdentifier;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 /// Trait to fetch untrusted peer servers.
 pub trait FetchUntrustedPeers {
@@ -29,22 +33,27 @@ pub trait FetchUntrustedPeers {
 /// Fetches the untrusted peer servers
 /// FIXME: Should probably be combined with the peer fetch in
 /// service/src/worker.rs
-pub struct UntrustedPeerFetcher<NodeApiFactory> {
+pub struct UntrustedPeerFetcher<NodeApiFactory, Runtime> {
 	node_api_factory: Arc<NodeApiFactory>,
+	_phantom: PhantomData<Runtime>,
 }
 
-impl<NodeApiFactory> UntrustedPeerFetcher<NodeApiFactory>
+impl<NodeApiFactory, Runtime> UntrustedPeerFetcher<NodeApiFactory, Runtime>
 where
-	NodeApiFactory: CreateNodeApi + Send + Sync,
+	NodeApiFactory: CreateNodeApi<Runtime> + Send + Sync,
+	Runtime: RuntimeConfigCollection,
+	u128: From<PlainTip<Runtime::Balance>>,
 {
 	pub fn new(node_api: Arc<NodeApiFactory>) -> Self {
-		UntrustedPeerFetcher { node_api_factory: node_api }
+		UntrustedPeerFetcher { node_api_factory: node_api, _phantom: PhantomData::default() }
 	}
 }
 
-impl<NodeApiFactory> FetchUntrustedPeers for UntrustedPeerFetcher<NodeApiFactory>
+impl<NodeApiFactory, Runtime> FetchUntrustedPeers for UntrustedPeerFetcher<NodeApiFactory, Runtime>
 where
-	NodeApiFactory: CreateNodeApi + Send + Sync,
+	NodeApiFactory: CreateNodeApi<Runtime> + Send + Sync,
+	Runtime: RuntimeConfigCollection,
+	u128: From<PlainTip<Runtime::Balance>>,
 {
 	fn get_untrusted_peer_url_of_shard(&self, shard: &ShardIdentifier) -> Result<String> {
 		let node_api = self.node_api_factory.create_api()?;

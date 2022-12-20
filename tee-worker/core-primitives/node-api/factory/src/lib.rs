@@ -16,12 +16,17 @@
 
 */
 
-use itp_api_client_types::{ParentchainApi, WsRpcClient};
+use itp_api_client_types::{ParentchainApi, PlainTip, WsRpcClient};
+use itp_types::RuntimeConfigCollection;
 use sp_core::sr25519;
-
+use substrate_api_client::FromHexString;
 /// Trait to create a node API, based on a node URL and signer.
-pub trait CreateNodeApi {
-	fn create_api(&self) -> Result<ParentchainApi>;
+pub trait CreateNodeApi<Runtime>
+where
+	Runtime: RuntimeConfigCollection,
+	u128: From<PlainTip<Runtime::Balance>>,
+{
+	fn create_api(&self) -> Result<ParentchainApi<Runtime>>;
 }
 
 /// Node API factory error.
@@ -47,10 +52,23 @@ impl NodeApiFactory {
 	}
 }
 
-impl CreateNodeApi for NodeApiFactory {
-	fn create_api(&self) -> Result<ParentchainApi> {
-		ParentchainApi::new(WsRpcClient::new(self.node_url.as_str()))
+impl<Runtime> CreateNodeApi<Runtime> for NodeApiFactory
+where
+	Runtime: RuntimeConfigCollection,
+	u128: From<PlainTip<Runtime::Balance>>,
+	Runtime::Hash: FromHexString,
+{
+	fn create_api(&self) -> Result<ParentchainApi<Runtime>> {
+		let client = WsRpcClient::new(self.node_url.as_str(), 200).map_err(|e| {
+			NodeApiFactoryError::FailedToCreateNodeApi(
+				itp_api_client_types::ApiClientError::RpcClient(e),
+			)
+		})?;
+		ParentchainApi::new(client)
 			.map_err(NodeApiFactoryError::FailedToCreateNodeApi)
-			.map(|a| a.set_signer(self.signer.clone()))
+			.map(|mut a| {
+				a.set_signer(self.signer.clone());
+				a
+			})
 	}
 }

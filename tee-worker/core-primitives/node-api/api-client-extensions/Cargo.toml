@@ -8,6 +8,7 @@ version = "0.9.0"
 # crates.io
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 thiserror = { version = "1.0" }
+serde = { version = "1.0.136", default-features = false, features = ["derive"] }
 
 # substrate
 sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.32" }
@@ -15,10 +16,14 @@ sp-finality-grandpa = { git = "https://github.com/paritytech/substrate.git", bra
 sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.32" }
 
 # scs
-substrate-api-client = { git = "https://github.com/scs/substrate-api-client.git", branch = "polkadot-v0.9.32" }
+substrate-api-client = { git = "https://github.com/litentry/substrate-api-client.git", branch = "polkadot-v0.9.32" }
+
+pallet-balances = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.32" }
 
 # local deps
 itp-types = { path = "../../types" }
+
+
 
 [features]
 # used for unit testing only!

@@ -35,10 +35,11 @@ use crate::{
 };
 use itp_enclave_api::remote_attestation::RemoteAttestationCallBacks;
 use itp_node_api::node_api_factory::CreateNodeApi;
+use itp_types::RuntimeConfigCollection;
 use its_peer_fetch::FetchBlocksFromPeer;
 use its_primitives::types::block::SignedBlock as SignedSidechainBlock;
 use its_storage::BlockStorage;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 /// Concrete implementation, should be moved out of the OCall Bridge, into the worker
 /// since the OCall bridge itself should not know any concrete types to ensure
@@ -52,6 +53,7 @@ pub struct OCallBridgeComponentFactory<
 	PeerBlockFetcher,
 	TokioHandle,
 	MetricsReceiver,
+	Runtime,
 > {
 	node_api_factory: Arc<NodeApi>,
 	block_broadcaster: Arc<Broadcaster>,
@@ -61,6 +63,7 @@ pub struct OCallBridgeComponentFactory<
 	peer_block_fetcher: Arc<PeerBlockFetcher>,
 	tokio_handle: Arc<TokioHandle>,
 	metrics_receiver: Arc<MetricsReceiver>,
+	_phantom: PhantomData<Runtime>,
 }
 
 impl<
@@ -72,6 +75,7 @@ impl<
 		PeerBlockFetcher,
 		TokioHandle,
 		MetricsReceiver,
+		Runtime,
 	>
 	OCallBridgeComponentFactory<
 		NodeApi,
@@ -82,6 +86,7 @@ impl<
 		PeerBlockFetcher,
 		TokioHandle,
 		MetricsReceiver,
+		Runtime,
 	>
 {
 	#[allow(clippy::too_many_arguments)]
@@ -104,6 +109,7 @@ impl<
 			peer_block_fetcher,
 			tokio_handle,
 			metrics_receiver,
+			_phantom: PhantomData::default(),
 		}
 	}
 }
@@ -117,6 +123,7 @@ impl<
 		PeerBlockFetcher,
 		TokioHandle,
 		MetricsReceiver,
+		Runtime,
 	> GetOCallBridgeComponents
 	for OCallBridgeComponentFactory<
 		NodeApi,
@@ -127,8 +134,9 @@ impl<
 		PeerBlockFetcher,
 		TokioHandle,
 		MetricsReceiver,
+		Runtime,
 	> where
-	NodeApi: CreateNodeApi + 'static,
+	NodeApi: CreateNodeApi<Runtime> + 'static,
 	Broadcaster: BroadcastBlocks + 'static,
 	EnclaveApi: RemoteAttestationCallBacks + 'static,
 	Storage: BlockStorage<SignedSidechainBlock> + 'static,
@@ -136,6 +144,7 @@ impl<
 	PeerBlockFetcher: FetchBlocksFromPeer<SignedBlockType = SignedSidechainBlock> + 'static,
 	TokioHandle: GetTokioHandle + 'static,
 	MetricsReceiver: ReceiveEnclaveMetrics + 'static,
+	Runtime: RuntimeConfigCollection,
 {
 	fn get_ra_api(&self) -> Arc<dyn RemoteAttestationBridge> {
 		Arc::new(RemoteAttestationOCall::new(self.enclave_api.clone()))

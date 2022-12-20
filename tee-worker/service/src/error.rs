@@ -16,7 +16,7 @@
 
 use codec::Error as CodecError;
 use itp_types::ShardIdentifier;
-use substrate_api_client::ApiClientError;
+use substrate_api_client::api::Error as ApiClientError;
 
 pub type ServiceResult<T> = Result<T, Error>;
 

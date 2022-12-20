@@ -19,27 +19,29 @@
 use crate::ocall_bridge::bridge_api::{OCallBridgeError, OCallBridgeResult, WorkerOnChainBridge};
 use codec::{Decode, Encode};
 use itp_node_api::node_api_factory::CreateNodeApi;
-use itp_types::{WorkerRequest, WorkerResponse};
+use itp_types::{RuntimeConfigCollection, WorkerRequest, WorkerResponse};
 use itp_utils::ToHexPrefixed;
 use log::*;
 use sp_core::storage::StorageKey;
 use sp_runtime::OpaqueExtrinsic;
-use std::{sync::Arc, vec::Vec};
-use substrate_api_client::XtStatus;
+use std::{marker::PhantomData, sync::Arc, vec::Vec};
+use substrate_api_client::{GetStorage, SubmitAndWatch, XtStatus};
 
-pub struct WorkerOnChainOCall<F> {
+pub struct WorkerOnChainOCall<F, Runtime> {
 	node_api_factory: Arc<F>,
+	_phantom: PhantomData<Runtime>,
 }
 
-impl<F> WorkerOnChainOCall<F> {
+impl<F, Runtime> WorkerOnChainOCall<F, Runtime> {
 	pub fn new(node_api_factory: Arc<F>) -> Self {
-		WorkerOnChainOCall { node_api_factory }
+		WorkerOnChainOCall { node_api_factory, _phantom: PhantomData::default() }
 	}
 }
 
-impl<F> WorkerOnChainBridge for WorkerOnChainOCall<F>
+impl<F, Runtime> WorkerOnChainBridge for WorkerOnChainOCall<F, Runtime>
 where
-	F: CreateNodeApi,
+	F: CreateNodeApi<Runtime>,
+	Runtime: RuntimeConfigCollection,
 {
 	fn worker_request(&self, request: Vec<u8>) -> OCallBridgeResult<Vec<u8>> {
 		debug!("    Entering ocall_worker_request");
@@ -89,7 +91,9 @@ where
 			debug!("Enclave wants to send {} extrinsics", extrinsics.len());
 			let api = self.node_api_factory.create_api()?;
 			for call in extrinsics.into_iter() {
-				if let Err(e) = api.send_extrinsic(call.to_hex(), XtStatus::Ready) {
+				if let Err(e) =
+					api.submit_and_watch_extrinsic_until(call.to_hex().as_str(), XtStatus::Ready)
+				{
 					error!("Could not send extrsinic to node: {:?}", e);
 				}
 			}

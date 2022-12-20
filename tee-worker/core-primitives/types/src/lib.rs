@@ -36,6 +36,7 @@ pub type PalletString = Vec<u8>;
 pub type PalletString = String;
 
 pub use sp_core::{crypto::AccountId32 as AccountId, H256};
+use sp_runtime::traits::GetRuntimeBlockType;
 
 pub use itp_sgx_runtime_primitives::types::*;
 
@@ -143,6 +144,36 @@ impl From<WorkerResponse<Vec<u8>>> for StorageEntry<Vec<u8>> {
 			WorkerResponse::ChainStorage(key, value, proof) => StorageEntry { key, value, proof },
 		}
 	}
+}
+
+pub trait RuntimeConfigCollection:
+	frame_system::Config<
+		AccountData = pallet_balances::AccountData<Self::Balance>,
+		Hash = H256,
+		Index = u32,
+		BlockNumber = u32,
+		AccountId = AccountId,
+		Header = Header,
+	> + pallet_balances::Config<Balance = u128>
+	+ GetRuntimeBlockType
+// where
+// 	<Self::RuntimeBlock as sp_runtime::traits::Block>::Header: From<Header>,
+{
+}
+
+impl<Runtime> RuntimeConfigCollection for Runtime
+where
+	Runtime: frame_system::Config<
+		AccountData = pallet_balances::AccountData<Self::Balance>,
+		Hash = H256,
+		Index = u32,
+		BlockNumber = u32,
+		AccountId = AccountId,
+		Header = Header,
+	>,
+	Runtime: pallet_balances::Config<Balance = u128>,
+	Runtime: GetRuntimeBlockType,
+{
 }
 
 #[cfg(test)]

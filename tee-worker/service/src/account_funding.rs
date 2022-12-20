@@ -21,42 +21,52 @@ use itp_node_api::api_client::{AccountApi, ParentchainApi};
 use itp_settings::worker::{
 	EXISTENTIAL_DEPOSIT_FACTOR_FOR_INIT_FUNDS, REGISTERING_FEE_FACTOR_FOR_INIT_FUNDS,
 };
+use itp_types::RuntimeConfigCollection;
 use log::*;
+use serde::de::DeserializeOwned;
 use sp_core::{
 	crypto::{AccountId32, Ss58Codec},
 	Pair,
 };
 use sp_keyring::AccountKeyring;
-use substrate_api_client::{Balance, GenericAddress, XtStatus};
+use substrate_api_client::{
+	FromHexString, GenericAddress, GetBalance, GetTransactionPayment, SubmitAndWatch, XtStatus,
+};
 
 /// Information about the enclave on-chain account.
 pub trait EnclaveAccountInfo {
-	fn free_balance(&self) -> ServiceResult<Balance>;
+	fn free_balance(&self) -> ServiceResult<u128>;
 }
 
-pub struct EnclaveAccountInfoProvider {
-	node_api: ParentchainApi,
-	account_id: AccountId32,
+pub struct EnclaveAccountInfoProvider<Runtime: RuntimeConfigCollection> {
+	node_api: ParentchainApi<Runtime>,
+	account_id: Runtime::AccountId,
 }
 
-impl EnclaveAccountInfo for EnclaveAccountInfoProvider {
-	fn free_balance(&self) -> ServiceResult<Balance> {
+impl<Runtime: RuntimeConfigCollection> EnclaveAccountInfo for EnclaveAccountInfoProvider<Runtime> {
+	fn free_balance(&self) -> ServiceResult<u128> {
 		self.node_api.get_free_balance(&self.account_id).map_err(|e| e.into())
 	}
 }
 
-impl EnclaveAccountInfoProvider {
-	pub fn new(node_api: ParentchainApi, account_id: AccountId32) -> Self {
+impl<Runtime: RuntimeConfigCollection> EnclaveAccountInfoProvider<Runtime> {
+	pub fn new(node_api: ParentchainApi<Runtime>, account_id: Runtime::AccountId) -> Self {
 		EnclaveAccountInfoProvider { node_api, account_id }
 	}
 }
 
-pub fn setup_account_funding(
-	api: &ParentchainApi,
+pub fn setup_account_funding<Runtime>(
+	api: &ParentchainApi<Runtime>,
 	accountid: &AccountId32,
 	extrinsic_prefix: String,
 	is_development_mode: bool,
-) -> ServiceResult<()> {
+) -> ServiceResult<()>
+where
+	Runtime: RuntimeConfigCollection,
+	Runtime::Hash: FromHexString,
+	Runtime::Header: DeserializeOwned,
+	Runtime::RuntimeBlock: DeserializeOwned,
+{
 	// Account funds
 	if is_development_mode {
 		// Development mode, the faucet will ensure that the enclave has enough funds
@@ -88,7 +98,16 @@ pub fn setup_account_funding(
 }
 
 // Alice plays the faucet and sends some funds to the account if balance is low
-fn ensure_account_has_funds(api: &ParentchainApi, accountid: &AccountId32) -> Result<(), Error> {
+fn ensure_account_has_funds<Runtime>(
+	api: &ParentchainApi<Runtime>,
+	accountid: &AccountId32,
+) -> Result<(), Error>
+where
+	Runtime: RuntimeConfigCollection,
+	Runtime::Hash: FromHexString,
+	Runtime::Header: DeserializeOwned,
+	Runtime::RuntimeBlock: DeserializeOwned,
+{
 	// check account balance
 	let free_balance = api.get_free_balance(accountid)?;
 	info!("TEE's free balance = {:?} (Account: {})", free_balance, accountid);
@@ -107,7 +126,10 @@ fn ensure_account_has_funds(api: &ParentchainApi, accountid: &AccountId32) -> Re
 	Ok(())
 }
 
-fn enclave_registration_fees(api: &ParentchainApi, xthex_prefixed: &str) -> Result<u128, Error> {
+fn enclave_registration_fees<Runtime: RuntimeConfigCollection>(
+	api: &ParentchainApi<Runtime>,
+	xthex_prefixed: &str,
+) -> Result<u128, Error> {
 	let reg_fee_details = api.get_fee_details(xthex_prefixed, None)?;
 	match reg_fee_details {
 		Some(details) => match details.inclusion_fee {
@@ -122,11 +144,17 @@ fn enclave_registration_fees(api: &ParentchainApi, xthex_prefixed: &str) -> Resu
 }
 
 // Alice sends some funds to the account
-fn bootstrap_funds_from_alice(
-	api: &ParentchainApi,
+fn bootstrap_funds_from_alice<Runtime>(
+	api: &ParentchainApi<Runtime>,
 	accountid: &AccountId32,
 	funding_amount: u128,
-) -> Result<(), Error> {
+) -> Result<(), Error>
+where
+	Runtime: RuntimeConfigCollection,
+	Runtime::Hash: FromHexString,
+	Runtime::Header: DeserializeOwned,
+	Runtime::RuntimeBlock: DeserializeOwned,
+{
 	let alice = AccountKeyring::Alice.pair();
 	info!("encoding Alice's public 	= {:?}", alice.public().0.encode());
 	let alice_acc = AccountId32::from(*alice.public().as_array_ref());
@@ -146,12 +174,13 @@ fn bootstrap_funds_from_alice(
 	}
 
 	let mut alice_signer_api = api.clone();
-	alice_signer_api.signer = Some(alice);
+	alice_signer_api.set_signer(alice);
 
 	println!("[+] bootstrap funding Enclave from Alice's funds");
 	let xt =
 		alice_signer_api.balance_transfer(GenericAddress::Id(accountid.clone()), funding_amount);
-	let xt_hash = alice_signer_api.send_extrinsic(xt.hex_encode(), XtStatus::InBlock)?;
+	let xt_hash = alice_signer_api
+		.submit_and_watch_extrinsic_until(xt.hex_encode().as_str(), XtStatus::InBlock)?;
 	info!("[<] Extrinsic got included in a block. Hash: {:?}\n", xt_hash);
 
 	// Verify funds have arrived.

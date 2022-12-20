@@ -30,18 +30,18 @@ pub mod sgx_reexport_prelude {
 }
 
 use codec::Encode;
+use core::marker::PhantomData;
 use error::Result;
 use itp_node_api::{
 	api_client::{ParentchainExtrinsicParams, ParentchainExtrinsicParamsBuilder},
 	metadata::{provider::AccessNodeMetadata, NodeMetadata},
 };
 use itp_nonce_cache::{MutateNonce, Nonce};
-use itp_types::OpaqueCall;
-use sp_core::{Pair, H256};
+use itp_types::{OpaqueCall, RuntimeConfigCollection};
+use sp_core::Pair;
 use sp_runtime::{generic::Era, MultiSignature, OpaqueExtrinsic};
 use std::{sync::Arc, vec::Vec};
-use substrate_api_client::{compose_extrinsic_offline, ExtrinsicParams};
-
+use substrate_api_client::{compose_extrinsic_offline, ExtrinsicParams, PlainTip};
 pub mod error;
 
 #[cfg(feature = "mocks")]
@@ -50,66 +50,76 @@ pub mod mock;
 /// Create extrinsics from opaque calls
 ///
 /// Also increases the nonce counter for each extrinsic that is created.
-pub trait CreateExtrinsics {
+pub trait CreateExtrinsics<Runtime: RuntimeConfigCollection> {
 	fn create_extrinsics(
 		&self,
 		calls: &[OpaqueCall],
-		extrinsics_params_builder: Option<ParentchainExtrinsicParamsBuilder>,
+		extrinsics_params_builder: Option<ParentchainExtrinsicParamsBuilder<Runtime>>,
 	) -> Result<Vec<OpaqueExtrinsic>>;
 }
 
 /// Extrinsics factory
-pub struct ExtrinsicsFactory<Signer, NonceCache, NodeMetadataRepository>
+pub struct ExtrinsicsFactory<Signer, NonceCache, NodeMetadataRepository, Runtime>
 where
 	Signer: Pair<Public = sp_core::ed25519::Public>,
 	Signer::Signature: Into<MultiSignature>,
 	NonceCache: MutateNonce,
 	NodeMetadataRepository: AccessNodeMetadata<MetadataType = NodeMetadata>,
+	Runtime: RuntimeConfigCollection,
 {
-	genesis_hash: H256,
+	genesis_hash: Runtime::Hash,
 	signer: Signer,
 	nonce_cache: Arc<NonceCache>,
 	node_metadata_repository: Arc<NodeMetadataRepository>,
+	_phantom: PhantomData<Runtime>,
 }
 
-impl<Signer, NonceCache, NodeMetadataRepository>
-	ExtrinsicsFactory<Signer, NonceCache, NodeMetadataRepository>
+impl<Signer, NonceCache, NodeMetadataRepository, Runtime>
+	ExtrinsicsFactory<Signer, NonceCache, NodeMetadataRepository, Runtime>
 where
 	Signer: Pair<Public = sp_core::ed25519::Public>,
 	Signer::Signature: Into<MultiSignature>,
 	NonceCache: MutateNonce,
 	NodeMetadataRepository: AccessNodeMetadata<MetadataType = NodeMetadata>,
+	Runtime: RuntimeConfigCollection,
 {
 	pub fn new(
-		genesis_hash: H256,
+		genesis_hash: Runtime::Hash,
 		signer: Signer,
 		nonce_cache: Arc<NonceCache>,
 		node_metadata_repository: Arc<NodeMetadataRepository>,
 	) -> Self {
-		ExtrinsicsFactory { genesis_hash, signer, nonce_cache, node_metadata_repository }
+		ExtrinsicsFactory {
+			genesis_hash,
+			signer,
+			nonce_cache,
+			node_metadata_repository,
+			_phantom: Default::default(),
+		}
 	}
 }
 
-impl<Signer, NonceCache, NodeMetadataRepository> CreateExtrinsics
-	for ExtrinsicsFactory<Signer, NonceCache, NodeMetadataRepository>
+impl<Signer, NonceCache, NodeMetadataRepository, Runtime> CreateExtrinsics<Runtime>
+	for ExtrinsicsFactory<Signer, NonceCache, NodeMetadataRepository, Runtime>
 where
 	Signer: Pair<Public = sp_core::ed25519::Public>,
 	Signer::Signature: Into<MultiSignature>,
 	NonceCache: MutateNonce,
 	NodeMetadataRepository: AccessNodeMetadata<MetadataType = NodeMetadata>,
+	Runtime: RuntimeConfigCollection,
 {
 	fn create_extrinsics(
 		&self,
 		calls: &[OpaqueCall],
-		extrinsics_params_builder: Option<ParentchainExtrinsicParamsBuilder>,
+		extrinsics_params_builder: Option<ParentchainExtrinsicParamsBuilder<Runtime>>,
 	) -> Result<Vec<OpaqueExtrinsic>> {
 		let mut nonce_lock = self.nonce_cache.load_for_mutation()?;
 		let mut nonce_value = nonce_lock.0;
 
 		let params_builder = extrinsics_params_builder.unwrap_or_else(|| {
-			ParentchainExtrinsicParamsBuilder::new()
+			ParentchainExtrinsicParamsBuilder::<Runtime>::new()
 				.era(Era::Immortal, self.genesis_hash)
-				.tip(0)
+				.tip(PlainTip::default())
 		});
 
 		let (runtime_spec_version, runtime_transaction_version) =
@@ -120,10 +130,10 @@ where
 		let extrinsics_buffer: Vec<OpaqueExtrinsic> = calls
 			.iter()
 			.map(|call| {
-				let extrinsic_params = ParentchainExtrinsicParams::new(
+				let extrinsic_params = ParentchainExtrinsicParams::<Runtime>::new(
 					runtime_spec_version,
 					runtime_transaction_version,
-					nonce_value,
+					nonce_value.into(),
 					self.genesis_hash,
 					params_builder,
 				);

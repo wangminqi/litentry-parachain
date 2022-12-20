@@ -30,8 +30,11 @@ pub use parentchain_primitives::{
 	AesOutput, BlockNumber as ParentchainBlockNumber, UserShieldingKeyType, MINUTES,
 	USER_SHIELDING_KEY_LEN, USER_SHIELDING_KEY_NONCE_LEN, USER_SHIELDING_KEY_TAG_LEN,
 };
+use sp_runtime::traits::ConstU32;
 // pub use trusted_call::*;
 pub use assertion::*;
 pub use validation_data::*;
 
 pub type ChallengeCode = [u8; 16];
+
+pub type MaxMetadataLength = ConstU32<128>;

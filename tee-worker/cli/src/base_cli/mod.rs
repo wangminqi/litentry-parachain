@@ -127,8 +127,8 @@ fn list_accounts() {
 }
 
 fn print_metadata(cli: &Cli) {
-	let meta = get_chain_api(cli).get_metadata().unwrap();
-	println!("Metadata:\n {}", Metadata::pretty_format(&meta).unwrap());
+	let meta = get_chain_api(cli).metadata();
+	println!("Metadata:\n {}", Metadata::pretty_format(meta).unwrap());
 }
 
 fn print_sgx_metadata(cli: &Cli) {

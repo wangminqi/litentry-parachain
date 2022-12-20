@@ -24,7 +24,7 @@ use crate::error::Result;
 use beefy_merkle_tree::{merkle_root, Keccak256};
 use codec::{Decode, Encode};
 use futures::executor;
-use ita_sgx_runtime::{pallet_imt::MetadataOf, Runtime};
+use ita_sgx_runtime::pallet_imt::MetadataOf;
 use ita_stf::{TrustedCall, TrustedOperation};
 use itp_node_api::{
 	api_client::ParentchainUncheckedExtrinsic,
@@ -36,14 +36,15 @@ use itp_sgx_crypto::{key_repository::AccessKey, ShieldingCryptoDecrypt, Shieldin
 use itp_stf_executor::traits::StfEnclaveSigning;
 use itp_stf_primitives::types::AccountId;
 use itp_top_pool_author::traits::AuthorApi;
-use itp_types::{CallWorkerFn, OpaqueCall, ShardIdentifier, ShieldFundsFn, H256};
+use itp_types::{
+	CallWorkerFn, OpaqueCall, RuntimeConfigCollection, ShardIdentifier, ShieldFundsFn, H256,
+};
 use litentry_primitives::{Identity, UserShieldingKeyType, ValidationData};
 use log::*;
 use pallet_imp::{CreateIdentityFn, RemoveIdentityFn, SetUserShieldingKeyFn, VerifyIdentityFn};
-use sp_core::blake2_256;
+use sp_core::{blake2_256, bounded::BoundedVec, ConstU32};
 use sp_runtime::traits::{AccountIdLookup, Block as ParentchainBlockTrait, Header, StaticLookup};
-use std::{sync::Arc, vec::Vec};
-
+use std::{marker::PhantomData, sync::Arc, vec::Vec};
 /// Trait to execute the indirect calls found in the extrinsics of a block.
 pub trait ExecuteIndirectCalls {
 	/// Scans blocks for extrinsics that ask the enclave to execute some actions.
@@ -82,16 +83,23 @@ pub struct IndirectCallsExecutor<
 	StfEnclaveSigner,
 	TopPoolAuthor,
 	NodeMetadataProvider,
+	Runtime,
 > {
 	shielding_key_repo: Arc<ShieldingKeyRepository>,
 	stf_enclave_signer: Arc<StfEnclaveSigner>,
 	top_pool_author: Arc<TopPoolAuthor>,
 	node_meta_data_provider: Arc<NodeMetadataProvider>,
+	_phantom: PhantomData<Runtime>,
 }
 
-impl<ShieldingKeyRepository, StfEnclaveSigner, TopPoolAuthor, NodeMetadataProvider>
-	IndirectCallsExecutor<ShieldingKeyRepository, StfEnclaveSigner, TopPoolAuthor, NodeMetadataProvider>
-where
+impl<ShieldingKeyRepository, StfEnclaveSigner, TopPoolAuthor, NodeMetadataProvider, Runtime>
+	IndirectCallsExecutor<
+		ShieldingKeyRepository,
+		StfEnclaveSigner,
+		TopPoolAuthor,
+		NodeMetadataProvider,
+		Runtime,
+	> where
 	ShieldingKeyRepository: AccessKey,
 	<ShieldingKeyRepository as AccessKey>::KeyType: ShieldingCryptoDecrypt<Error = itp_sgx_crypto::Error>
 		+ ShieldingCryptoEncrypt<Error = itp_sgx_crypto::Error>,
@@ -99,6 +107,7 @@ where
 	TopPoolAuthor: AuthorApi<H256, H256> + Send + Sync + 'static,
 	NodeMetadataProvider: AccessNodeMetadata,
 	NodeMetadataProvider::MetadataType: TeerexCallIndexes + IMPCallIndexes,
+	Runtime: RuntimeConfigCollection,
 {
 	pub fn new(
 		shielding_key_repo: Arc<ShieldingKeyRepository>,
@@ -111,12 +120,13 @@ where
 			stf_enclave_signer,
 			top_pool_author,
 			node_meta_data_provider,
+			_phantom: Default::default(),
 		}
 	}
 
 	fn handle_shield_funds_xt(
 		&self,
-		xt: ParentchainUncheckedExtrinsic<ShieldFundsFn>,
+		xt: ParentchainUncheckedExtrinsic<ShieldFundsFn, Runtime>,
 	) -> Result<()> {
 		let (call, account_encrypted, amount, shard) = xt.function;
 		info!("Found ShieldFunds extrinsic in block: \nCall: {:?} \nAccount Encrypted {:?} \nAmount: {} \nShard: {}",
@@ -180,13 +190,14 @@ where
 	is_parentchain_function!(is_verify_identity_funciton, verify_identity_call_indexes);
 }
 
-impl<ShieldingKeyRepository, StfEnclaveSigner, TopPoolAuthor, NodeMetadataProvider>
+impl<ShieldingKeyRepository, StfEnclaveSigner, TopPoolAuthor, NodeMetadataProvider, Runtime>
 	ExecuteIndirectCalls
 	for IndirectCallsExecutor<
 		ShieldingKeyRepository,
 		StfEnclaveSigner,
 		TopPoolAuthor,
 		NodeMetadataProvider,
+		Runtime,
 	> where
 	ShieldingKeyRepository: AccessKey,
 	<ShieldingKeyRepository as AccessKey>::KeyType: ShieldingCryptoDecrypt<Error = itp_sgx_crypto::Error>
@@ -195,6 +206,10 @@ impl<ShieldingKeyRepository, StfEnclaveSigner, TopPoolAuthor, NodeMetadataProvid
 	TopPoolAuthor: AuthorApi<H256, H256> + Send + Sync + 'static,
 	NodeMetadataProvider: AccessNodeMetadata,
 	NodeMetadataProvider::MetadataType: TeerexCallIndexes + IMPCallIndexes,
+	Runtime: RuntimeConfigCollection
+		+ ita_sgx_runtime::pallet_imt::Config<
+			MaxMetadataLength = litentry_primitives::MaxMetadataLength,
+		>,
 {
 	fn execute_indirect_calls_in_extrinsics<ParentchainBlock>(
 		&self,
@@ -211,7 +226,7 @@ impl<ShieldingKeyRepository, StfEnclaveSigner, TopPoolAuthor, NodeMetadataProvid
 			let encoded_xt_opaque = xt_opaque.encode();
 
 			// Found ShieldFunds extrinsic in block.
-			if let Ok(xt) = ParentchainUncheckedExtrinsic::<ShieldFundsFn>::decode(
+			if let Ok(xt) = ParentchainUncheckedExtrinsic::<ShieldFundsFn, Runtime>::decode(
 				&mut encoded_xt_opaque.as_slice(),
 			) {
 				if self.is_shield_funds_function(&xt.function.0) {
@@ -231,7 +246,7 @@ impl<ShieldingKeyRepository, StfEnclaveSigner, TopPoolAuthor, NodeMetadataProvid
 
 			// Found CallWorker extrinsic in block.
 			// No else-if here! Because the same opaque extrinsic can contain multiple Fns at once (this lead to intermittent M6 failures)
-			if let Ok(xt) = ParentchainUncheckedExtrinsic::<CallWorkerFn>::decode(
+			if let Ok(xt) = ParentchainUncheckedExtrinsic::<CallWorkerFn, Runtime>::decode(
 				&mut encoded_xt_opaque.as_slice(),
 			) {
 				if self.is_call_worker_function(&xt.function.0) {
@@ -244,7 +259,7 @@ impl<ShieldingKeyRepository, StfEnclaveSigner, TopPoolAuthor, NodeMetadataProvid
 
 			// litentry
 			// Found SetUserShieldingKey extrinsic
-			if let Ok(xt) = ParentchainUncheckedExtrinsic::<SetUserShieldingKeyFn>::decode(
+			if let Ok(xt) = ParentchainUncheckedExtrinsic::<SetUserShieldingKeyFn, Runtime>::decode(
 				&mut encoded_xt_opaque.as_slice(),
 			) {
 				if self.is_set_user_shielding_key_function(&xt.function.0) {
@@ -276,7 +291,7 @@ impl<ShieldingKeyRepository, StfEnclaveSigner, TopPoolAuthor, NodeMetadataProvid
 			}
 
 			// Found CreateIdentityFn extrinsic
-			if let Ok(xt) = ParentchainUncheckedExtrinsic::<CreateIdentityFn>::decode(
+			if let Ok(xt) = ParentchainUncheckedExtrinsic::<CreateIdentityFn, Runtime>::decode(
 				&mut encoded_xt_opaque.as_slice(),
 			) {
 				if self.is_create_identity_funciton(&xt.function.0) {
@@ -286,11 +301,13 @@ impl<ShieldingKeyRepository, StfEnclaveSigner, TopPoolAuthor, NodeMetadataProvid
 					let identity: Identity = Identity::decode(
 						&mut shielding_key.decrypt(&encrypted_identity).unwrap().as_slice(),
 					)?;
-					let metadata = match encrypted_metadata {
+					let metadata: Option<BoundedVec<u8, ConstU32<128>>> = match encrypted_metadata {
 						None => None,
 						Some(m) => {
 							let decrypted_metadata = shielding_key.decrypt(&m)?;
-							Some(MetadataOf::<Runtime>::decode(&mut decrypted_metadata.as_slice())?)
+							let metada =
+								MetadataOf::<Runtime>::decode(&mut decrypted_metadata.as_slice())?;
+							Some(metada.into())
 						},
 					};
 
@@ -319,7 +336,7 @@ impl<ShieldingKeyRepository, StfEnclaveSigner, TopPoolAuthor, NodeMetadataProvid
 			}
 
 			// Found RemoveIdentityFn extrinsic
-			if let Ok(xt) = ParentchainUncheckedExtrinsic::<RemoveIdentityFn>::decode(
+			if let Ok(xt) = ParentchainUncheckedExtrinsic::<RemoveIdentityFn, Runtime>::decode(
 				&mut encoded_xt_opaque.as_slice(),
 			) {
 				if self.is_remove_identity_funciton(&xt.function.0) {
@@ -351,7 +368,7 @@ impl<ShieldingKeyRepository, StfEnclaveSigner, TopPoolAuthor, NodeMetadataProvid
 			}
 
 			// Found VerifyIdentity extrinsic
-			if let Ok(xt) = ParentchainUncheckedExtrinsic::<VerifyIdentityFn>::decode(
+			if let Ok(xt) = ParentchainUncheckedExtrinsic::<VerifyIdentityFn, Runtime>::decode(
 				&mut encoded_xt_opaque.as_slice(),
 			) {
 				if self.is_verify_identity_funciton(&xt.function.0) {

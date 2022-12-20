@@ -14,8 +14,8 @@ dependencies = [
 
 [[package]]
 name = "ac-compose-macros"
-version = "0.2.0"
-source = "git+https://github.com/scs/substrate-api-client.git?branch=polkadot-v0.9.32#948007f79ec8769716510a70bec7cb5d206590ae"
+version = "0.2.1"
+source = "git+https://github.com/litentry/substrate-api-client.git?branch=polkadot-v0.9.32#afe9d356bee87a8723e2d5b85aa71de2c950836e"
 dependencies = [
  "ac-primitives",
  "log 0.4.17",
@@ -23,21 +23,17 @@ dependencies = [
  "sp-application-crypto",
  "sp-core",
  "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
 name = "ac-node-api"
-version = "0.2.0"
-source = "git+https://github.com/scs/substrate-api-client.git?branch=polkadot-v0.9.32#948007f79ec8769716510a70bec7cb5d206590ae"
+version = "0.2.1"
+source = "git+https://github.com/litentry/substrate-api-client.git?branch=polkadot-v0.9.32#afe9d356bee87a8723e2d5b85aa71de2c950836e"
 dependencies = [
- "ac-primitives",
  "bitvec",
  "derive_more",
  "either",
- "frame-metadata 15.0.0 (git+https://github.com/integritee-network/frame-metadata)",
- "frame-support",
- "frame-system",
+ "frame-metadata 15.0.0 (git+https://github.com/paritytech/frame-metadata)",
  "hex 0.4.3",
  "log 0.4.17",
  "parity-scale-codec",
@@ -53,14 +49,24 @@ dependencies = [
 
 [[package]]
 name = "ac-primitives"
-version = "0.2.0"
-source = "git+https://github.com/scs/substrate-api-client.git?branch=polkadot-v0.9.32#948007f79ec8769716510a70bec7cb5d206590ae"
+version = "0.3.0"
+source = "git+https://github.com/litentry/substrate-api-client.git?branch=polkadot-v0.9.32#afe9d356bee87a8723e2d5b85aa71de2c950836e"
 dependencies = [
+ "frame-system",
  "hex 0.4.3",
+ "pallet-assets",
+ "pallet-balances",
+ "pallet-contracts",
+ "pallet-staking",
  "parity-scale-codec",
+ "scale-info",
+ "serde 1.0.150",
+ "serde_json 1.0.89",
  "sp-core",
  "sp-runtime",
+ "sp-staking",
  "sp-std",
+ "sp-weights",
 ]
 
 [[package]]
@@ -1851,7 +1857,7 @@ dependencies = [
  "async-trait",
  "cumulus-primitives-core",
  "futures 0.3.25",
- "jsonrpsee-core",
+ "jsonrpsee-core 0.15.1",
  "parity-scale-codec",
  "polkadot-overseer",
  "polkadot-service",
@@ -2932,7 +2938,7 @@ dependencies = [
 [[package]]
 name = "frame-metadata"
 version = "15.0.0"
-source = "git+https://github.com/integritee-network/frame-metadata#3b43da9821238681f9431276d55b92a079142083"
+source = "git+https://github.com/paritytech/frame-metadata#1ea329920838b3f4170f421cde53ce7e6a15ccee"
 dependencies = [
  "cfg-if 1.0.0",
  "parity-scale-codec",
@@ -4582,6 +4588,7 @@ name = "itc-rpc-client"
 version = "0.9.0"
 dependencies = [
  "env_logger 0.9.3",
+ "frame-metadata 15.0.0 (git+https://github.com/paritytech/frame-metadata)",
  "itc-tls-websocket-server",
  "itp-networking-utils",
  "itp-rpc",
@@ -4680,7 +4687,9 @@ name = "itp-api-client-extensions"
 version = "0.9.0"
 dependencies = [
  "itp-types",
+ "pallet-balances",
  "parity-scale-codec",
+ "serde 1.0.150",
  "sp-core",
  "sp-finality-grandpa",
  "sp-runtime",
@@ -4841,7 +4850,9 @@ name = "itp-node-api-factory"
 version = "0.9.0"
 dependencies = [
  "itp-api-client-types",
+ "itp-types",
  "sp-core",
+ "substrate-api-client",
  "thiserror 1.0.37",
 ]
 
@@ -5190,6 +5201,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-std",
+ "substrate-api-client",
 ]
 
 [[package]]
@@ -5316,6 +5328,7 @@ dependencies = [
  "sgx_types",
  "sp-core",
  "sp-runtime",
+ "substrate-api-client",
  "thiserror 1.0.37",
  "thiserror 1.0.9",
 ]
@@ -5355,6 +5368,7 @@ dependencies = [
  "itc-rpc-client",
  "itp-node-api",
  "itp-test",
+ "itp-types",
  "its-primitives",
  "its-rpc-handler",
  "its-storage",
@@ -5548,12 +5562,44 @@ version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bd0d559d5e679b1ab2f869b486a11182923863b1b3ee8b421763cdd707b783a"
 dependencies = [
- "jsonrpsee-core",
+ "jsonrpsee-core 0.15.1",
  "jsonrpsee-http-server 0.15.1",
  "jsonrpsee-proc-macros 0.15.1",
  "jsonrpsee-types 0.15.1",
  "jsonrpsee-ws-server 0.15.1",
  "tracing",
+]
+
+[[package]]
+name = "jsonrpsee"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d291e3a5818a2384645fd9756362e6d89cf0541b0b916fa7702ea4a9833608e"
+dependencies = [
+ "jsonrpsee-client-transport",
+ "jsonrpsee-core 0.16.2",
+ "jsonrpsee-types 0.16.2",
+]
+
+[[package]]
+name = "jsonrpsee-client-transport"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "965de52763f2004bc91ac5bcec504192440f0b568a5d621c59d9dbd6f886c3fb"
+dependencies = [
+ "futures-util 0.3.25",
+ "http 0.2.8",
+ "jsonrpsee-core 0.16.2",
+ "jsonrpsee-types 0.16.2",
+ "pin-project",
+ "rustls-native-certs 0.6.2",
+ "soketto 0.7.1",
+ "thiserror 1.0.37",
+ "tokio",
+ "tokio-rustls 0.23.4",
+ "tokio-util 0.7.4",
+ "tracing",
+ "webpki-roots 0.22.6",
 ]
 
 [[package]]
@@ -5583,6 +5629,28 @@ dependencies = [
  "tokio",
  "tracing",
  "unicase 2.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "jsonrpsee-core"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4e70b4439a751a5de7dd5ed55eacff78ebf4ffe0fc009cb1ebb11417f5b536b"
+dependencies = [
+ "anyhow",
+ "async-lock",
+ "async-trait",
+ "beef",
+ "futures-channel 0.3.25",
+ "futures-timer",
+ "futures-util 0.3.25",
+ "jsonrpsee-types 0.16.2",
+ "rustc-hash",
+ "serde 1.0.150",
+ "serde_json 1.0.89",
+ "thiserror 1.0.37",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5635,7 +5703,7 @@ dependencies = [
  "futures-channel 0.3.25",
  "futures-util 0.3.25",
  "hyper",
- "jsonrpsee-core",
+ "jsonrpsee-core 0.15.1",
  "jsonrpsee-types 0.15.1",
  "serde 1.0.150",
  "serde_json 1.0.89",
@@ -5692,6 +5760,20 @@ name = "jsonrpsee-types"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e290bba767401b646812f608c099b922d8142603c9e73a50fb192d3ac86f4a0d"
+dependencies = [
+ "anyhow",
+ "beef",
+ "serde 1.0.150",
+ "serde_json 1.0.89",
+ "thiserror 1.0.37",
+ "tracing",
+]
+
+[[package]]
+name = "jsonrpsee-types"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bd522fe1ce3702fd94812965d7bb7a3364b1c9aba743944c5a00529aae80f8c"
 dependencies = [
  "anyhow",
  "beef",
@@ -5774,7 +5856,7 @@ dependencies = [
  "futures-channel 0.3.25",
  "futures-util 0.3.25",
  "http 0.2.8",
- "jsonrpsee-core",
+ "jsonrpsee-core 0.15.1",
  "jsonrpsee-types 0.15.1",
  "serde_json 1.0.89",
  "soketto 0.7.1",
@@ -7826,6 +7908,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-assets"
+version = "4.0.0-dev"
+source = "git+https://github.com/paritytech/substrate.git?branch=polkadot-v0.9.32#5ea6d95309aaccfa399c5f72e5a14a4b7c6c4ca1"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-aura"
 version = "4.0.0-dev"
 source = "git+https://github.com/paritytech/substrate.git?branch=polkadot-v0.9.32#5ea6d95309aaccfa399c5f72e5a14a4b7c6c4ca1"
@@ -8058,6 +8154,56 @@ dependencies = [
  "sp-io 6.0.0 (git+https://github.com/paritytech/substrate.git?branch=polkadot-v0.9.32)",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-contracts"
+version = "4.0.0-dev"
+source = "git+https://github.com/paritytech/substrate.git?branch=polkadot-v0.9.32#5ea6d95309aaccfa399c5f72e5a14a4b7c6c4ca1"
+dependencies = [
+ "bitflags",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "impl-trait-for-tuples",
+ "log 0.4.17",
+ "pallet-contracts-primitives",
+ "pallet-contracts-proc-macro",
+ "parity-scale-codec",
+ "rand 0.8.5",
+ "scale-info",
+ "serde 1.0.150",
+ "smallvec 1.10.0",
+ "sp-api",
+ "sp-core",
+ "sp-io 6.0.0 (git+https://github.com/paritytech/substrate.git?branch=polkadot-v0.9.32)",
+ "sp-runtime",
+ "sp-sandbox",
+ "sp-std",
+ "wasm-instrument",
+ "wasmi-validation",
+]
+
+[[package]]
+name = "pallet-contracts-primitives"
+version = "6.0.0"
+source = "git+https://github.com/paritytech/substrate.git?branch=polkadot-v0.9.32#5ea6d95309aaccfa399c5f72e5a14a4b7c6c4ca1"
+dependencies = [
+ "bitflags",
+ "parity-scale-codec",
+ "sp-runtime",
+ "sp-std",
+ "sp-weights",
+]
+
+[[package]]
+name = "pallet-contracts-proc-macro"
+version = "4.0.0-dev"
+source = "git+https://github.com/paritytech/substrate.git?branch=polkadot-v0.9.32#5ea6d95309aaccfa399c5f72e5a14a4b7c6c4ca1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -14317,19 +14463,18 @@ dependencies = [
 
 [[package]]
 name = "substrate-api-client"
-version = "0.7.0"
-source = "git+https://github.com/scs/substrate-api-client.git?branch=polkadot-v0.9.32#948007f79ec8769716510a70bec7cb5d206590ae"
+version = "0.8.0"
+source = "git+https://github.com/litentry/substrate-api-client.git?branch=polkadot-v0.9.32#afe9d356bee87a8723e2d5b85aa71de2c950836e"
 dependencies = [
  "ac-compose-macros",
  "ac-node-api",
  "ac-primitives",
- "frame-metadata 15.0.0 (git+https://github.com/integritee-network/frame-metadata)",
+ "frame-metadata 15.0.0 (git+https://github.com/paritytech/frame-metadata)",
  "frame-support",
- "frame-system",
+ "futures 0.3.25",
  "hex 0.4.3",
+ "jsonrpsee 0.16.2",
  "log 0.4.17",
- "pallet-balances",
- "pallet-transaction-payment",
  "parity-scale-codec",
  "primitive-types",
  "serde 1.0.150",
@@ -14341,7 +14486,8 @@ dependencies = [
  "sp-std",
  "sp-version",
  "thiserror 1.0.37",
- "ws",
+ "tungstenite 0.18.0",
+ "url 2.3.1",
 ]
 
 [[package]]
@@ -14360,7 +14506,7 @@ dependencies = [
 [[package]]
 name = "substrate-client-keystore"
 version = "0.7.0"
-source = "git+https://github.com/scs/substrate-api-client.git?branch=polkadot-v0.9.32#948007f79ec8769716510a70bec7cb5d206590ae"
+source = "git+https://github.com/litentry/substrate-api-client.git?branch=polkadot-v0.9.32#afe9d356bee87a8723e2d5b85aa71de2c950836e"
 dependencies = [
  "async-trait",
  "hex 0.4.3",
@@ -15147,6 +15293,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "tungstenite"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30ee6ab729cd4cf0fd55218530c4522ed30b7b6081752839b68fcec8d0960788"
+dependencies = [
+ "base64 0.13.1",
+ "byteorder 1.4.3",
+ "bytes 1.3.0",
+ "http 0.2.8",
+ "httparse 1.8.0",
+ "log 0.4.17",
+ "native-tls",
+ "rand 0.8.5",
+ "sha1 0.10.5",
+ "thiserror 1.0.37",
+ "url 2.3.1",
+ "utf-8 0.7.6",
+]
+
+[[package]]
 name = "twoway"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15161,7 +15327,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "digest 0.10.6",
  "rand 0.8.5",
  "static_assertions",

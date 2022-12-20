@@ -26,7 +26,7 @@ use itc_parentchain_light_client::{
 };
 use itp_extrinsics_factory::CreateExtrinsics;
 use itp_stf_executor::traits::StfUpdateState;
-use itp_types::{OpaqueCall, H256};
+use itp_types::{OpaqueCall, RuntimeConfigCollection, H256};
 use log::*;
 use sp_runtime::{
 	generic::SignedBlock as SignedBlockG,
@@ -41,19 +41,21 @@ pub struct ParentchainBlockImporter<
 	StfExecutor,
 	ExtrinsicsFactory,
 	IndirectCallsExecutor,
+	Runtime,
 > where
 	ParentchainBlock: ParentchainBlockTrait<Hash = H256>,
 	NumberFor<ParentchainBlock>: BlockNumberOps,
 	ValidatorAccessor: ValidatorAccess<ParentchainBlock>,
 	StfExecutor: StfUpdateState,
-	ExtrinsicsFactory: CreateExtrinsics,
+	ExtrinsicsFactory: CreateExtrinsics<Runtime>,
 	IndirectCallsExecutor: ExecuteIndirectCalls,
+	Runtime: RuntimeConfigCollection,
 {
 	validator_accessor: Arc<ValidatorAccessor>,
 	stf_executor: Arc<StfExecutor>,
 	extrinsics_factory: Arc<ExtrinsicsFactory>,
 	indirect_calls_executor: Arc<IndirectCallsExecutor>,
-	_phantom: PhantomData<ParentchainBlock>,
+	_phantom: PhantomData<(ParentchainBlock, Runtime)>,
 }
 
 impl<
@@ -62,6 +64,7 @@ impl<
 		StfExecutor,
 		ExtrinsicsFactory,
 		IndirectCallsExecutor,
+		Runtime,
 	>
 	ParentchainBlockImporter<
 		ParentchainBlock,
@@ -69,13 +72,15 @@ impl<
 		StfExecutor,
 		ExtrinsicsFactory,
 		IndirectCallsExecutor,
+		Runtime,
 	> where
 	ParentchainBlock: ParentchainBlockTrait<Hash = H256, Header = ParentchainHeader>,
 	NumberFor<ParentchainBlock>: BlockNumberOps,
 	ValidatorAccessor: ValidatorAccess<ParentchainBlock>,
 	StfExecutor: StfUpdateState,
-	ExtrinsicsFactory: CreateExtrinsics,
+	ExtrinsicsFactory: CreateExtrinsics<Runtime>,
 	IndirectCallsExecutor: ExecuteIndirectCalls,
+	Runtime: RuntimeConfigCollection,
 {
 	pub fn new(
 		validator_accessor: Arc<ValidatorAccessor>,
@@ -99,6 +104,7 @@ impl<
 		StfExecutor,
 		ExtrinsicsFactory,
 		IndirectCallsExecutor,
+		Runtime,
 	> ImportParentchainBlocks
 	for ParentchainBlockImporter<
 		ParentchainBlock,
@@ -106,13 +112,15 @@ impl<
 		StfExecutor,
 		ExtrinsicsFactory,
 		IndirectCallsExecutor,
+		Runtime,
 	> where
 	ParentchainBlock: ParentchainBlockTrait<Hash = H256, Header = ParentchainHeader>,
 	NumberFor<ParentchainBlock>: BlockNumberOps,
 	ValidatorAccessor: ValidatorAccess<ParentchainBlock>,
 	StfExecutor: StfUpdateState,
-	ExtrinsicsFactory: CreateExtrinsics,
+	ExtrinsicsFactory: CreateExtrinsics<Runtime>,
 	IndirectCallsExecutor: ExecuteIndirectCalls,
+	Runtime: RuntimeConfigCollection,
 {
 	type SignedBlockType = SignedBlockG<ParentchainBlock>;
 

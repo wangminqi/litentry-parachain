@@ -23,7 +23,7 @@ use itp_extrinsics_factory::CreateExtrinsics;
 use itp_node_api_metadata::pallet_sidechain::SidechainCallIndexes;
 use itp_node_api_metadata_provider::AccessNodeMetadata;
 use itp_settings::worker::BLOCK_NUMBER_FINALIZATION_DIFF;
-use itp_types::{OpaqueCall, ShardIdentifier};
+use itp_types::{OpaqueCall, RuntimeConfigCollection, ShardIdentifier};
 use its_primitives::traits::Header as HeaderTrait;
 use log::*;
 use sp_runtime::traits::Block as ParentchainBlockTrait;
@@ -38,6 +38,7 @@ pub trait ConfirmBlockImport<SidechainHeader> {
 pub struct BlockImportConfirmationHandler<
 	ParentchainBlock,
 	SidechainHeader,
+	Runtime,
 	NodeMetadataRepository,
 	ExtrinsicsFactory,
 	ValidatorAccessor,
@@ -45,12 +46,13 @@ pub struct BlockImportConfirmationHandler<
 	metadata_repository: Arc<NodeMetadataRepository>,
 	extrinsics_factory: Arc<ExtrinsicsFactory>,
 	validator_accessor: Arc<ValidatorAccessor>,
-	_phantom: PhantomData<(ParentchainBlock, SidechainHeader)>,
+	_phantom: PhantomData<(ParentchainBlock, SidechainHeader, Runtime)>,
 }
 
 impl<
 		ParentchainBlock,
 		SidechainHeader,
+		Runtime,
 		NodeMetadataRepository,
 		ExtrinsicsFactory,
 		ValidatorAccessor,
@@ -58,6 +60,7 @@ impl<
 	BlockImportConfirmationHandler<
 		ParentchainBlock,
 		SidechainHeader,
+		Runtime,
 		NodeMetadataRepository,
 		ExtrinsicsFactory,
 		ValidatorAccessor,
@@ -80,6 +83,7 @@ impl<
 impl<
 		ParentchainBlock,
 		SidechainHeader,
+		Runtime,
 		NodeMetadataRepository,
 		ExtrinsicsFactory,
 		ValidatorAccessor,
@@ -87,6 +91,7 @@ impl<
 	for BlockImportConfirmationHandler<
 		ParentchainBlock,
 		SidechainHeader,
+		Runtime,
 		NodeMetadataRepository,
 		ExtrinsicsFactory,
 		ValidatorAccessor,
@@ -96,8 +101,9 @@ impl<
 	SidechainHeader: HeaderTrait,
 	NodeMetadataRepository: AccessNodeMetadata,
 	NodeMetadataRepository::MetadataType: SidechainCallIndexes,
-	ExtrinsicsFactory: CreateExtrinsics,
+	ExtrinsicsFactory: CreateExtrinsics<Runtime>,
 	ValidatorAccessor: ValidatorAccess<ParentchainBlock> + Send + Sync + 'static,
+	Runtime: RuntimeConfigCollection,
 {
 	fn confirm_import(&self, header: &SidechainHeader, shard: &ShardIdentifier) -> Result<()> {
 		let call = self

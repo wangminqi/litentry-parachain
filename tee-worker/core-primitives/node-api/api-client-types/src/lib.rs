@@ -22,6 +22,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use substrate_api_client::BalanceFor;
 pub use substrate_api_client::{
 	PlainTip, PlainTipExtrinsicParams, PlainTipExtrinsicParamsBuilder, SubstrateDefaultSignedExtra,
 	UncheckedExtrinsicV4,
@@ -30,8 +31,8 @@ pub use substrate_api_client::{
 /// Configuration for the ExtrinsicParams.
 ///
 /// Valid for the default integritee node
-pub type ParentchainExtrinsicParams = PlainTipExtrinsicParams;
-pub type ParentchainExtrinsicParamsBuilder = PlainTipExtrinsicParamsBuilder;
+pub type ParentchainExtrinsicParams<Runtime> = PlainTipExtrinsicParams<Runtime>;
+pub type ParentchainExtrinsicParamsBuilder<Runtime> = PlainTipExtrinsicParamsBuilder<Runtime>;
 
 // Pay in asset fees.
 //
@@ -39,8 +40,10 @@ pub type ParentchainExtrinsicParamsBuilder = PlainTipExtrinsicParamsBuilder;
 //pub type ParentchainExtrinsicParams = AssetTipExtrinsicParams;
 //pub type ParentchainExtrinsicParamsBuilder = AssetTipExtrinsicParamsBuilder;
 
-pub type ParentchainUncheckedExtrinsic<Call> =
-	UncheckedExtrinsicV4<Call, SubstrateDefaultSignedExtra<PlainTip>>;
+// pub type Runtime = BalancesConfig + FrameSystemConfig;
+
+pub type ParentchainUncheckedExtrinsic<Call, Runtime> =
+	UncheckedExtrinsicV4<Call, SubstrateDefaultSignedExtra<PlainTip<BalanceFor<Runtime>>, u32>>;
 
 #[cfg(feature = "std")]
 pub use api::*;
@@ -50,7 +53,10 @@ mod api {
 	use super::ParentchainExtrinsicParams;
 	use substrate_api_client::Api;
 
-	pub use substrate_api_client::{rpc::WsRpcClient, ApiClientError};
+	pub use substrate_api_client::{
+		api::Error as ApiClientError, rpc::TungsteniteRpcClient as WsRpcClient,
+	};
 
-	pub type ParentchainApi = Api<sp_core::sr25519::Pair, WsRpcClient, ParentchainExtrinsicParams>;
+	pub type ParentchainApi<Runtime> =
+		Api<sp_core::sr25519::Pair, WsRpcClient, ParentchainExtrinsicParams<Runtime>, Runtime>;
 }

@@ -24,6 +24,7 @@ use crate::{config::Config, error::Error, TrackInitialization};
 use async_trait::async_trait;
 use itc_rpc_client::direct_client::{DirectApi, DirectClient as DirectWorkerApi};
 use itp_node_api::{api_client::PalletTeerexApi, node_api_factory::CreateNodeApi};
+use itp_types::RuntimeConfigCollection;
 use its_primitives::types::SignedBlock as SignedSidechainBlock;
 use its_rpc_handler::constants::RPC_METHOD_NAME_IMPORT_BLOCKS;
 use jsonrpsee::{
@@ -31,21 +32,25 @@ use jsonrpsee::{
 	ws_client::WsClientBuilder,
 };
 use log::*;
-use std::sync::{Arc, RwLock};
+use std::{
+	marker::PhantomData,
+	sync::{Arc, RwLock},
+};
 
 pub type WorkerResult<T> = Result<T, Error>;
 pub type Url = String;
-pub struct Worker<Config, NodeApiFactory, Enclave, InitializationHandler> {
+pub struct Worker<Config, NodeApiFactory, Enclave, InitializationHandler, Runtime> {
 	_config: Config,
 	// unused yet, but will be used when more methods are migrated to the worker
 	_enclave_api: Arc<Enclave>,
 	node_api_factory: Arc<NodeApiFactory>,
 	initialization_handler: Arc<InitializationHandler>,
 	peers: RwLock<Vec<Url>>,
+	_phantom: PhantomData<Runtime>,
 }
 
-impl<Config, NodeApiFactory, Enclave, InitializationHandler>
-	Worker<Config, NodeApiFactory, Enclave, InitializationHandler>
+impl<Config, NodeApiFactory, Enclave, InitializationHandler, Runtime>
+	Worker<Config, NodeApiFactory, Enclave, InitializationHandler, Runtime>
 {
 	pub fn new(
 		config: Config,
@@ -60,6 +65,7 @@ impl<Config, NodeApiFactory, Enclave, InitializationHandler>
 			node_api_factory,
 			initialization_handler,
 			peers: RwLock::new(peers),
+			_phantom: Default::default(),
 		}
 	}
 }
@@ -71,12 +77,13 @@ pub trait AsyncBlockBroadcaster {
 }
 
 #[async_trait]
-impl<NodeApiFactory, Enclave, InitializationHandler> AsyncBlockBroadcaster
-	for Worker<Config, NodeApiFactory, Enclave, InitializationHandler>
+impl<NodeApiFactory, Enclave, InitializationHandler, Runtime> AsyncBlockBroadcaster
+	for Worker<Config, NodeApiFactory, Enclave, InitializationHandler, Runtime>
 where
-	NodeApiFactory: CreateNodeApi + Send + Sync,
+	NodeApiFactory: CreateNodeApi<Runtime> + Send + Sync,
 	Enclave: Send + Sync,
 	InitializationHandler: TrackInitialization + Send + Sync,
+	Runtime: RuntimeConfigCollection + Send + Sync,
 {
 	async fn broadcast_blocks(&self, blocks: Vec<SignedSidechainBlock>) -> WorkerResult<()> {
 		if blocks.is_empty() {
@@ -135,10 +142,11 @@ pub trait UpdatePeers {
 	}
 }
 
-impl<NodeApiFactory, Enclave, InitializationHandler> UpdatePeers
-	for Worker<Config, NodeApiFactory, Enclave, InitializationHandler>
+impl<NodeApiFactory, Enclave, InitializationHandler, Runtime> UpdatePeers
+	for Worker<Config, NodeApiFactory, Enclave, InitializationHandler, Runtime>
 where
-	NodeApiFactory: CreateNodeApi + Send + Sync,
+	NodeApiFactory: CreateNodeApi<Runtime> + Send + Sync,
+	Runtime: RuntimeConfigCollection + Send + Sync,
 {
 	fn search_peers(&self) -> WorkerResult<Vec<String>> {
 		let node_api = self
