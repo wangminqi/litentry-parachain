@@ -45,7 +45,7 @@ use itp_sgx_crypto::Ed25519Seal;
 use itp_sgx_io::StaticSealedIO;
 use itp_stf_state_handler::query_shard_state::QueryShardState;
 use itp_time_utils::duration_now;
-use itp_types::{Block, OpaqueCall, H256};
+use itp_types::{Block, OpaqueCall, RuntimeConfigCollection, H256};
 use its_primitives::{
 	traits::{
 		Block as SidechainBlockTrait, Header as HeaderTrait, ShardIdentifierFor, SignedBlock,
@@ -59,12 +59,14 @@ use its_sidechain::{
 	validateer_fetch::ValidateerFetch,
 };
 use log::*;
+use serde::de::DeserializeOwned;
 use sgx_types::sgx_status_t;
 use sp_core::Pair;
 use sp_runtime::{
 	generic::SignedBlock as SignedParentchainBlock, traits::Block as BlockTrait, MultiSignature,
 };
 use std::{sync::Arc, time::Instant, vec::Vec};
+use substrate_api_client::FromHexString;
 
 #[no_mangle]
 pub unsafe extern "C" fn execute_trusted_calls() -> sgx_status_t {
@@ -249,6 +251,7 @@ pub(crate) fn send_blocks_and_extrinsics<
 	OCallApi,
 	ValidatorAccessor,
 	ExtrinsicsFactory,
+	Runtime,
 >(
 	blocks: Vec<SignedSidechainBlock>,
 	opaque_calls: Vec<OpaqueCall>,
@@ -262,7 +265,11 @@ where
 	OCallApi: EnclaveSidechainOCallApi,
 	ValidatorAccessor: ValidatorAccess<ParentchainBlock> + Send + Sync + 'static,
 	NumberFor<ParentchainBlock>: BlockNumberOps,
-	ExtrinsicsFactory: CreateExtrinsics,
+	ExtrinsicsFactory: CreateExtrinsics<Runtime>,
+	Runtime: RuntimeConfigCollection,
+	Runtime::Hash: FromHexString,
+	Runtime::Header: DeserializeOwned,
+	Runtime::RuntimeBlock: DeserializeOwned,
 {
 	debug!("Proposing {} sidechain block(s) (broadcasting to peers)", blocks.len());
 	ocall_api.propose_sidechain_blocks(blocks)?;

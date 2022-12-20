@@ -22,17 +22,23 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use substrate_api_client::BalanceFor;
 pub use substrate_api_client::{
-	PlainTip, PlainTipExtrinsicParams, PlainTipExtrinsicParamsBuilder, SubstrateDefaultSignedExtra,
+	BaseExtrinsicParams, BaseExtrinsicParamsBuilder, PlainTip, SubstrateDefaultSignedExtra,
 	UncheckedExtrinsicV4,
 };
+
+pub type BalanceFor<Runtime> = <Runtime as pallet_balances::Config>::Balance;
+pub type HashFor<Runtime> = <Runtime as frame_system::Config>::Hash;
+pub type IndexFor<Runtime> = <Runtime as frame_system::Config>::Index;
 
 /// Configuration for the ExtrinsicParams.
 ///
 /// Valid for the default integritee node
-pub type ParentchainExtrinsicParams<Runtime> = PlainTipExtrinsicParams<Runtime>;
-pub type ParentchainExtrinsicParamsBuilder<Runtime> = PlainTipExtrinsicParamsBuilder<Runtime>;
+pub type ParentchainExtrinsicParams<Runtime> =
+	BaseExtrinsicParams<PlainTip<BalanceFor<Runtime>>, IndexFor<Runtime>, HashFor<Runtime>>;
+
+pub type ParentchainExtrinsicParamsBuilder<Runtime> =
+	BaseExtrinsicParamsBuilder<PlainTip<BalanceFor<Runtime>>, HashFor<Runtime>>;
 
 // Pay in asset fees.
 //

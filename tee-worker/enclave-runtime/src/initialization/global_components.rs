@@ -28,7 +28,8 @@ use crate::{
 	rpc::rpc_response_channel::RpcResponseChannel,
 	tls_ra::seal_handler::SealHandler,
 };
-use ita_sgx_runtime::Runtime;
+// TODO fixme should be parachain Runtime
+use ita_sgx_runtime::{Runtime, Runtime as Layer1Runtime};
 use ita_stf::{Getter, State as StfState, Stf, TrustedCallSigned};
 use itc_direct_rpc_server::{
 	rpc_connection_registry::ConnectionRegistry, rpc_responder::RpcResponder,
@@ -119,12 +120,13 @@ pub type EnclaveSidechainApi = SidechainApi<ParentchainBlock>;
 
 // Parentchain types
 pub type EnclaveExtrinsicsFactory =
-	ExtrinsicsFactory<Pair, NonceCache, EnclaveNodeMetadataRepository>;
+	ExtrinsicsFactory<Pair, NonceCache, EnclaveNodeMetadataRepository, Layer1Runtime>;
 pub type EnclaveIndirectCallsExecutor = IndirectCallsExecutor<
 	EnclaveShieldingKeyRepository,
 	EnclaveStfEnclaveSigner,
 	EnclaveTopPoolAuthor,
 	EnclaveNodeMetadataRepository,
+	Layer1Runtime,
 >;
 pub type EnclaveValidatorAccessor = ValidatorAccessor<
 	LightValidation<ParentchainBlock, EnclaveOCallApi>,
@@ -137,6 +139,7 @@ pub type EnclaveParentchainBlockImporter = ParentchainBlockImporter<
 	EnclaveStfExecutor,
 	EnclaveExtrinsicsFactory,
 	EnclaveIndirectCallsExecutor,
+	Layer1Runtime,
 >;
 pub type EnclaveParentchainBlockImportQueue = BlockImportQueue<SignedParentchainBlock>;
 pub type EnclaveTriggeredParentchainBlockImportDispatcher =
@@ -176,6 +179,7 @@ pub type EnclaveSidechainBlockImportQueue = BlockImportQueue<SignedSidechainBloc
 pub type EnclaveBlockImportConfirmationHandler = BlockImportConfirmationHandler<
 	ParentchainBlock,
 	<<SignedSidechainBlock as SignedSidechainBlockTrait>::Block as SidechainBlockTrait>::HeaderType,
+	Layer1Runtime,
 	EnclaveNodeMetadataRepository,
 	EnclaveExtrinsicsFactory,
 	EnclaveValidatorAccessor,
@@ -203,6 +207,7 @@ pub type EnclaveOffchainWorkerExecutor = itc_offchain_worker_executor::executor:
 	EnclaveValidatorAccessor,
 	EnclaveExtrinsicsFactory,
 	EnclaveStf,
+	Layer1Runtime,
 >;
 
 /// Base component instances

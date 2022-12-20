@@ -4452,11 +4452,13 @@ dependencies = [
  "itp-types",
  "log 0.4.17",
  "parity-scale-codec",
+ "serde 1.0.151",
  "sgx_tstd",
  "sgx_types",
  "sp-core",
  "sp-io 6.0.0",
  "sp-runtime",
+ "substrate-api-client",
  "thiserror 1.0.38",
  "thiserror 1.0.9",
 ]
@@ -4728,6 +4730,8 @@ dependencies = [
 name = "itp-api-client-types"
 version = "0.9.0"
 dependencies = [
+ "frame-system",
+ "pallet-balances",
  "sp-core",
  "substrate-api-client",
 ]

@@ -26,10 +26,12 @@ use itp_stf_executor::{traits::StateUpdateProposer, ExecutedOperation};
 use itp_stf_interface::system_pallet::SystemPalletEventInterface;
 use itp_stf_state_handler::{handle_state::HandleState, query_shard_state::QueryShardState};
 use itp_top_pool_author::traits::AuthorApi;
-use itp_types::{OpaqueCall, ShardIdentifier, H256};
+use itp_types::{OpaqueCall, RuntimeConfigCollection, ShardIdentifier, H256};
 use log::*;
+use serde::de::DeserializeOwned;
 use sp_runtime::traits::Block;
 use std::{marker::PhantomData, sync::Arc, time::Duration, vec::Vec};
+use substrate_api_client::FromHexString;
 
 /// Off-chain worker executor implementation.
 ///
@@ -47,13 +49,14 @@ pub struct Executor<
 	ValidatorAccessor,
 	ExtrinsicsFactory,
 	Stf,
+	Runtime,
 > {
 	top_pool_author: Arc<TopPoolAuthor>,
 	stf_executor: Arc<StfExecutor>,
 	state_handler: Arc<StateHandler>,
 	validator_accessor: Arc<ValidatorAccessor>,
 	extrinsics_factory: Arc<ExtrinsicsFactory>,
-	_phantom: PhantomData<(ParentchainBlock, Stf)>,
+	_phantom: PhantomData<(ParentchainBlock, Stf, Runtime)>,
 }
 
 impl<
@@ -64,6 +67,7 @@ impl<
 		ValidatorAccessor,
 		ExtrinsicsFactory,
 		Stf,
+		Runtime,
 	>
 	Executor<
 		ParentchainBlock,
@@ -73,15 +77,20 @@ impl<
 		ValidatorAccessor,
 		ExtrinsicsFactory,
 		Stf,
+		Runtime,
 	> where
 	ParentchainBlock: Block<Hash = H256>,
 	StfExecutor: StateUpdateProposer,
 	TopPoolAuthor: AuthorApi<H256, ParentchainBlock::Hash>,
 	StateHandler: QueryShardState + HandleState<StateT = StfExecutor::Externalities>,
 	ValidatorAccessor: ValidatorAccess<ParentchainBlock> + Send + Sync + 'static,
-	ExtrinsicsFactory: CreateExtrinsics,
+	ExtrinsicsFactory: CreateExtrinsics<Runtime>,
 	NumberFor<ParentchainBlock>: BlockNumberOps,
 	Stf: SystemPalletEventInterface<StfExecutor::Externalities>,
+	Runtime: RuntimeConfigCollection,
+	Runtime::Hash: FromHexString,
+	Runtime::Header: DeserializeOwned,
+	Runtime::RuntimeBlock: DeserializeOwned,
 {
 	pub fn new(
 		top_pool_author: Arc<TopPoolAuthor>,
