@@ -49,8 +49,16 @@ impl NodeApiFactory {
 
 impl CreateNodeApi for NodeApiFactory {
 	fn create_api(&self) -> Result<ParentchainApi> {
-		ParentchainApi::new(WsRpcClient::new(self.node_url.as_str()))
+		let client = WsRpcClient::new(self.node_url.as_str(), 200).map_err(|e| {
+			NodeApiFactoryError::FailedToCreateNodeApi(
+				itp_api_client_types::ApiClientError::RpcClient(e),
+			)
+		})?;
+		ParentchainApi::new(client)
 			.map_err(NodeApiFactoryError::FailedToCreateNodeApi)
-			.map(|a| a.set_signer(self.signer.clone()))
+			.map(|mut a| {
+				a.set_signer(self.signer.clone());
+				a
+			})
 	}
 }

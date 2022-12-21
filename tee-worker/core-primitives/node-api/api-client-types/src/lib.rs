@@ -23,15 +23,22 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use substrate_api_client::{
-	PlainTip, PlainTipExtrinsicParams, PlainTipExtrinsicParamsBuilder, SubstrateDefaultSignedExtra,
+	BaseExtrinsicParams, BaseExtrinsicParamsBuilder, PlainTip, SubstrateDefaultSignedExtra,
 	UncheckedExtrinsicV4,
 };
+
+pub use my_node_runtime::Runtime;
+
+pub type Balance = <Runtime as pallet_balances::Config>::Balance;
+pub type Hash = <Runtime as frame_system::Config>::Hash;
+pub type Index = <Runtime as frame_system::Config>::Index;
 
 /// Configuration for the ExtrinsicParams.
 ///
 /// Valid for the default integritee node
-pub type ParentchainExtrinsicParams = PlainTipExtrinsicParams;
-pub type ParentchainExtrinsicParamsBuilder = PlainTipExtrinsicParamsBuilder;
+pub type ParentchainExtrinsicParams = BaseExtrinsicParams<PlainTip<Balance>, Index, Hash>;
+
+pub type ParentchainExtrinsicParamsBuilder = BaseExtrinsicParamsBuilder<PlainTip<Balance>, Hash>;
 
 // Pay in asset fees.
 //
@@ -40,17 +47,20 @@ pub type ParentchainExtrinsicParamsBuilder = PlainTipExtrinsicParamsBuilder;
 //pub type ParentchainExtrinsicParamsBuilder = AssetTipExtrinsicParamsBuilder;
 
 pub type ParentchainUncheckedExtrinsic<Call> =
-	UncheckedExtrinsicV4<Call, SubstrateDefaultSignedExtra<PlainTip>>;
+	UncheckedExtrinsicV4<Call, SubstrateDefaultSignedExtra<PlainTip<Balance>, u32>>;
 
 #[cfg(feature = "std")]
 pub use api::*;
 
 #[cfg(feature = "std")]
 mod api {
-	use super::ParentchainExtrinsicParams;
+	use super::{ParentchainExtrinsicParams, Runtime};
 	use substrate_api_client::Api;
 
-	pub use substrate_api_client::{rpc::WsRpcClient, ApiClientError};
+	pub use substrate_api_client::{
+		api::Error as ApiClientError, rpc::TungsteniteRpcClient as WsRpcClient,
+	};
 
-	pub type ParentchainApi = Api<sp_core::sr25519::Pair, WsRpcClient, ParentchainExtrinsicParams>;
+	pub type ParentchainApi =
+		Api<sp_core::sr25519::Pair, WsRpcClient, ParentchainExtrinsicParams, Runtime>;
 }

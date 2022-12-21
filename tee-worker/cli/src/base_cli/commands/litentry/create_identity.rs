@@ -27,7 +27,7 @@ use litentry_primitives::Identity;
 use log::*;
 
 use sp_core::sr25519 as sr25519_core;
-use substrate_api_client::{compose_extrinsic, UncheckedExtrinsicV4, XtStatus};
+use substrate_api_client::{compose_extrinsic, SubmitAndWatch, UncheckedExtrinsicV4, XtStatus};
 
 #[derive(Parser)]
 pub struct CreateIdentityCommand {
@@ -41,7 +41,7 @@ pub struct CreateIdentityCommand {
 
 impl CreateIdentityCommand {
 	pub(crate) fn run(&self, cli: &Cli) {
-		let chain_api = get_chain_api(cli);
+		let mut chain_api = get_chain_api(cli);
 
 		let shard_opt = match self.shard.from_base58() {
 			Ok(s) => ShardIdentifier::decode(&mut &s[..]),
@@ -54,7 +54,7 @@ impl CreateIdentityCommand {
 		};
 
 		let who = get_pair_from_str(&self.account);
-		let chain_api = chain_api.set_signer(sr25519_core::Pair::from(who));
+		chain_api.set_signer(sr25519_core::Pair::from(who));
 
 		let identity: Result<Identity, _> = serde_json::from_str(self.identity.as_str());
 		if let Err(e) = identity {
@@ -73,7 +73,9 @@ impl CreateIdentityCommand {
 			encrypted_identity.to_vec()
 		);
 
-		let tx_hash = chain_api.send_extrinsic(xt.hex_encode(), XtStatus::Finalized).unwrap();
+		let tx_hash = chain_api
+			.submit_and_watch_extrinsic_until(xt.hex_encode().as_str(), XtStatus::Finalized)
+			.unwrap();
 		println!("[+] TrustedOperation got finalized. Hash: {:?}\n", tx_hash);
 	}
 }

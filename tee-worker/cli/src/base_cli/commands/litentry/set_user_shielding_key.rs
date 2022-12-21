@@ -26,7 +26,7 @@ use itp_stf_primitives::types::ShardIdentifier;
 use log::*;
 
 use sp_core::sr25519 as sr25519_core;
-use substrate_api_client::{compose_extrinsic, UncheckedExtrinsicV4, XtStatus};
+use substrate_api_client::{compose_extrinsic, SubmitAndWatch, UncheckedExtrinsicV4, XtStatus};
 
 #[derive(Parser)]
 pub struct SetUserShieldingKeyCommand {
@@ -42,7 +42,7 @@ pub struct SetUserShieldingKeyCommand {
 
 impl SetUserShieldingKeyCommand {
 	pub(crate) fn run(&self, cli: &Cli) {
-		let chain_api = get_chain_api(cli);
+		let mut chain_api = get_chain_api(cli);
 
 		let shard_opt = match self.shard.from_base58() {
 			Ok(s) => ShardIdentifier::decode(&mut &s[..]),
@@ -55,7 +55,7 @@ impl SetUserShieldingKeyCommand {
 		};
 
 		let who = get_pair_from_str(&self.account);
-		let chain_api = chain_api.set_signer(sr25519_core::Pair::from(who));
+		chain_api.set_signer(sr25519_core::Pair::from(who));
 
 		let mut key = [0u8; 32];
 		hex::decode_to_slice(&self.key_hex, &mut key).expect("decoding key failed");
@@ -66,7 +66,9 @@ impl SetUserShieldingKeyCommand {
 		let xt: UncheckedExtrinsicV4<_, _> =
 			compose_extrinsic!(chain_api, IMP, "set_user_shielding_key", shard, encrypted_key);
 
-		let tx_hash = chain_api.send_extrinsic(xt.hex_encode(), XtStatus::Finalized).unwrap();
+		let tx_hash = chain_api
+			.submit_and_watch_extrinsic_until(xt.hex_encode().as_str(), XtStatus::Finalized)
+			.unwrap();
 		println!("[+] TrustedOperation got finalized. Hash: {:?}\n", tx_hash);
 	}
 }

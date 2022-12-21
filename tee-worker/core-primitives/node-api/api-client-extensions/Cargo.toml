@@ -13,12 +13,16 @@ thiserror = { version = "1.0" }
 sp-core = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.32" }
 sp-finality-grandpa = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.32" }
 sp-runtime = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.32" }
+pallet-balances = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.32" }
+frame-system = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.32" }
 
 # scs
-substrate-api-client = { git = "https://github.com/scs/substrate-api-client.git", branch = "polkadot-v0.9.32" }
+substrate-api-client = { git = "https://github.com/litentry/substrate-api-client.git", branch = "polkadot-v0.9.32" }
 
 # local deps
 itp-types = { path = "../../types" }
+#my-node-runtime = { package = "rococo-parachain-runtime", path = "../../../../runtime/rococo" }
+my-node-runtime = { package = "integritee-node-runtime", default-features = false, git = "https://github.com/litentry/integritee-node.git", branch = "litentry-runtime" }
 
 [features]
 # used for unit testing only!

@@ -23,14 +23,15 @@ use itc_parentchain::{
 };
 use itp_enclave_api::{enclave_base::EnclaveBase, sidechain::Sidechain};
 use itp_node_api::api_client::ChainApi;
-use itp_types::SignedBlock;
 use log::*;
-use my_node_runtime::Header;
+use my_node_runtime::{Block, Header};
 use sp_finality_grandpa::VersionedAuthorityList;
 use sp_runtime::traits::Header as HeaderTrait;
 use std::{cmp::min, sync::Arc};
 
 const BLOCK_SYNC_BATCH_SIZE: u32 = 1000;
+
+type SignedBlock = sp_runtime::generic::SignedBlock<Block>;
 
 pub trait HandleParentchain {
 	/// Initializes all parentchain specific components on the enclave side.
@@ -80,7 +81,7 @@ where
 	) -> ServiceResult<Self> {
 		let genesis_hash = parentchain_api.get_genesis_hash()?;
 		let genesis_header: Header = parentchain_api
-			.get_header(Some(genesis_hash))?
+			.get_block_header(Some(genesis_hash))?
 			.ok_or(Error::MissingGenesisHeader)?;
 
 		let parentchain_init_params: ParentchainInitParams = if parentchain_api

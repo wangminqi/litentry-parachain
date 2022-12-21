@@ -22,12 +22,17 @@ use itp_settings::worker::{
 	EXISTENTIAL_DEPOSIT_FACTOR_FOR_INIT_FUNDS, REGISTERING_FEE_FACTOR_FOR_INIT_FUNDS,
 };
 use log::*;
+use my_node_runtime::Runtime;
 use sp_core::{
 	crypto::{AccountId32, Ss58Codec},
 	Pair,
 };
 use sp_keyring::AccountKeyring;
-use substrate_api_client::{Balance, GenericAddress, XtStatus};
+use substrate_api_client::{
+	GenericAddress, GetBalance, GetTransactionPayment, SubmitAndWatch, XtStatus,
+};
+
+pub type Balance = <Runtime as pallet_balances::Config>::Balance;
 
 /// Information about the enclave on-chain account.
 pub trait EnclaveAccountInfo {
@@ -146,12 +151,13 @@ fn bootstrap_funds_from_alice(
 	}
 
 	let mut alice_signer_api = api.clone();
-	alice_signer_api.signer = Some(alice);
+	alice_signer_api.set_signer(alice);
 
 	println!("[+] bootstrap funding Enclave from Alice's funds");
 	let xt =
 		alice_signer_api.balance_transfer(GenericAddress::Id(accountid.clone()), funding_amount);
-	let xt_hash = alice_signer_api.send_extrinsic(xt.hex_encode(), XtStatus::InBlock)?;
+	let xt_hash = alice_signer_api
+		.submit_and_watch_extrinsic_until(xt.hex_encode().as_str(), XtStatus::InBlock)?;
 	info!("[<] Extrinsic got included in a block. Hash: {:?}\n", xt_hash);
 
 	// Verify funds have arrived.

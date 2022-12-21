@@ -25,7 +25,7 @@ use log::*;
 use sp_core::storage::StorageKey;
 use sp_runtime::OpaqueExtrinsic;
 use std::{sync::Arc, vec::Vec};
-use substrate_api_client::XtStatus;
+use substrate_api_client::{GetStorage, SubmitAndWatch, XtStatus};
 
 pub struct WorkerOnChainOCall<F> {
 	node_api_factory: Arc<F>,
@@ -89,7 +89,9 @@ where
 			debug!("Enclave wants to send {} extrinsics", extrinsics.len());
 			let api = self.node_api_factory.create_api()?;
 			for call in extrinsics.into_iter() {
-				if let Err(e) = api.send_extrinsic(call.to_hex(), XtStatus::Ready) {
+				if let Err(e) =
+					api.submit_and_watch_extrinsic_until(call.to_hex().as_str(), XtStatus::Ready)
+				{
 					error!("Could not send extrsinic to node: {:?}", e);
 				}
 			}

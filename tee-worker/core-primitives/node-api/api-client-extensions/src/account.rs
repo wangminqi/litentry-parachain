@@ -15,19 +15,18 @@
 
 */
 
-use crate::ApiResult;
-use itp_types::AccountId;
+use crate::{AccountId, ApiResult, Hash, Index, Runtime};
 use sp_core::crypto::Pair;
 use sp_runtime::MultiSignature;
-use substrate_api_client::{Api, ExtrinsicParams, RpcClient};
-
+use substrate_api_client::{rpc::Request, Api, ExtrinsicParams, GetAccountInformation};
 /// ApiClient extension that contains some convenience methods around accounts.
 pub trait AccountApi {
 	fn get_nonce_of(&self, who: &AccountId) -> ApiResult<u32>;
 	fn get_free_balance(&self, who: &AccountId) -> ApiResult<u128>;
 }
 
-impl<P: Pair, Client: RpcClient, Params: ExtrinsicParams> AccountApi for Api<P, Client, Params>
+impl<P: Pair, Client: Request, Params: ExtrinsicParams<Index, Hash>> AccountApi
+	for Api<P, Client, Params, Runtime>
 where
 	MultiSignature: From<P::Signature>,
 {

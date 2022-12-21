@@ -75,17 +75,12 @@ use my_node_runtime::{Hash, Header, RuntimeEvent};
 use sgx_types::*;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use sp_keyring::AccountKeyring;
-use std::{
-	path::PathBuf,
-	str,
-	sync::{
-		mpsc::{channel, Sender},
-		Arc,
-	},
-	thread,
-	time::Duration,
+use sp_runtime::traits::Header as HeaderTrait;
+use std::{path::PathBuf, str, sync::Arc, thread, time::Duration};
+use substrate_api_client::{
+	rpc::HandleSubscription, utils::FromHexString, GetHeader, SubmitAndWatch, SubscribeChain,
+	SubscribeFrameSystem, XtStatus,
 };
-use substrate_api_client::{utils::FromHexString, Header as HeaderTrait, XtStatus};
 use teerex_primitives::ShardIdentifier;
 extern crate config as rs_config;
 
@@ -470,9 +465,9 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 		.set_nonce(nonce)
 		.expect("Could not set nonce of enclave. Returning here...");
 
-	let metadata = node_api.metadata.clone();
-	let runtime_spec_version = node_api.runtime_version.spec_version;
-	let runtime_transaction_version = node_api.runtime_version.transaction_version;
+	let metadata = node_api.metadata().clone();
+	let runtime_spec_version = node_api.runtime_version().spec_version;
+	let runtime_transaction_version = node_api.runtime_version().transaction_version;
 	enclave
 		.set_node_metadata(
 			NodeMetadata::new(metadata, runtime_spec_version, runtime_transaction_version).encode(),
@@ -507,7 +502,9 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	}
 
 	println!("[>] Register the enclave (send the extrinsic)");
-	let register_enclave_xt_hash = node_api.send_extrinsic(xthex, XtStatus::Finalized).unwrap();
+	let register_enclave_xt_hash = node_api
+		.submit_and_watch_extrinsic_until(xthex.as_str(), XtStatus::Finalized)
+		.unwrap();
 	println!("[<] Extrinsic got finalized. Hash: {:?}\n", register_enclave_xt_hash);
 
 	let register_enclave_xt_header =
@@ -587,23 +584,15 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	// ------------------------------------------------------------------------
 	// subscribe to events and react on firing
 	println!("*** Subscribing to events");
-	let (sender, receiver) = channel();
-	let sender2 = sender.clone();
-	let _eventsubscriber = thread::Builder::new()
-		.name("eventsubscriber".to_owned())
-		.spawn(move || {
-			node_api.subscribe_events(sender2).unwrap();
-		})
-		.unwrap();
-
+	let mut subscription = node_api.subscribe_system_events().unwrap();
 	println!("[+] Subscribed to events. waiting...");
-	let timeout = Duration::from_millis(10);
 	loop {
-		if let Ok(msg) = receiver.recv_timeout(timeout) {
-			if let Ok(events) = parse_events(msg.clone()) {
-				print_events(events, sender.clone())
-			}
-		}
+		let event_bytes = subscription.next().unwrap().unwrap().changes[0].1.clone().unwrap().0;
+		let events = Vec::<frame_system::EventRecord<RuntimeEvent, Hash>>::decode(
+			&mut event_bytes.as_slice(),
+		)
+		.unwrap();
+		print_events(events);
 	}
 }
 
@@ -643,7 +632,7 @@ fn parse_events(event: String) -> Result<Events, String> {
 	Events::decode(&mut _er_enc).map_err(|_| "Decoding Events Failed".to_string())
 }
 
-fn print_events(events: Events, _sender: Sender<String>) {
+fn print_events(events: Events) {
 	for evr in &events {
 		debug!("Decoded: phase = {:?}, event = {:?}", evr.phase, evr.event);
 		match &evr.event {
@@ -774,26 +763,27 @@ fn subscribe_to_parentchain_new_headers<E: EnclaveBase + Sidechain>(
 	parentchain_handler: Arc<ParentchainHandler<ParentchainApi, E>>,
 	mut last_synced_header: Header,
 ) -> Result<(), Error> {
-	let (sender, receiver) = channel();
 	//TODO: this should be implemented by parentchain_handler directly, and not via
 	// exposed parentchain_api. Blocked by https://github.com/scs/substrate-api-client/issues/267.
-	parentchain_handler
+	let mut subscription = parentchain_handler
 		.parentchain_api()
-		.subscribe_finalized_heads(sender)
+		.subscribe_finalized_heads()
 		.map_err(Error::ApiClient)?;
 
 	loop {
-		let new_header: Header = match receiver.recv() {
-			Ok(header_str) => serde_json::from_str(&header_str).map_err(Error::Serialization),
-			Err(e) => Err(Error::ApiSubscriptionDisconnected(e)),
+		match subscription.next() {
+			None => Ok(()),
+			Some(Ok(new_header)) => {
+				// let new_header :Header = serde_json::from_str(&header_str).map_err(Error::Serialization)?;
+				println!(
+					"[+] Received finalized header update ({}), syncing parent chain...",
+					new_header.number
+				);
+				last_synced_header = parentchain_handler.sync_parentchain(last_synced_header)?;
+				Ok(())
+			},
+			Some(Err(e)) => Err(Error::ApiClient(e.into())),
 		}?;
-
-		println!(
-			"[+] Received finalized header update ({}), syncing parent chain...",
-			new_header.number
-		);
-
-		last_synced_header = parentchain_handler.sync_parentchain(last_synced_header)?;
 	}
 }
 

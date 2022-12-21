@@ -24,7 +24,7 @@ use crate::{
 			EnclaveOffchainWorkerExecutor, EnclaveParentchainBlockImportDispatcher,
 			EnclaveParentchainBlockImportQueue, EnclaveParentchainBlockImporter,
 			EnclaveStfExecutor, EnclaveTriggeredParentchainBlockImportDispatcher,
-			EnclaveValidatorAccessor, GLOBAL_OCALL_API_COMPONENT,
+			EnclaveValidatorAccessor, Layer1Runtime, GLOBAL_OCALL_API_COMPONENT,
 			GLOBAL_SHIELDING_KEY_REPOSITORY_COMPONENT, GLOBAL_STATE_HANDLER_COMPONENT,
 			GLOBAL_STATE_OBSERVER_COMPONENT, GLOBAL_TOP_POOL_AUTHOR_COMPONENT,
 		},

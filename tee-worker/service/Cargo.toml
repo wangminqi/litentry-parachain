@@ -56,8 +56,9 @@ its-rpc-handler = { path = "../sidechain/rpc-handler" }
 its-storage = { path = "../sidechain/storage" }
 
 # scs / integritee
-my-node-runtime = { package = "rococo-parachain-runtime", path = "../../runtime/rococo" }
-substrate-api-client = { git = "https://github.com/scs/substrate-api-client.git", branch = "polkadot-v0.9.32" }
+#my-node-runtime = { package = "rococo-parachain-runtime", path = "../../runtime/rococo" }
+my-node-runtime = { package = "integritee-node-runtime", default-features = false, git = "https://github.com/litentry/integritee-node.git", branch = "litentry-runtime" }
+substrate-api-client = { git = "https://github.com/litentry/substrate-api-client.git", branch = "polkadot-v0.9.32" }
 teerex-primitives = { git = "https://github.com/integritee-network/pallets.git", branch = "master" }
 
 # Substrate dependencies

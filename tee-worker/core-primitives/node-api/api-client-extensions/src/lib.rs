@@ -17,7 +17,9 @@
 
 //! Some substrate-api-client extension traits.
 
-pub use substrate_api_client::{rpc::WsRpcClient, Api, ApiClientError};
+pub use substrate_api_client::{
+	api::Error as ApiClientError, rpc::TungsteniteRpcClient as WsRpcClient, Api,
+};
 
 pub mod account;
 pub mod chain;
@@ -31,3 +33,8 @@ pub use pallet_teeracle::*;
 pub use pallet_teerex::*;
 
 pub type ApiResult<T> = Result<T, ApiClientError>;
+
+pub(crate) use my_node_runtime::{AccountId, Block, Header, Runtime};
+pub(crate) type Hash = <Runtime as frame_system::Config>::Hash;
+pub(crate) type Index = <Runtime as frame_system::Config>::Index;
+pub(crate) type SignedBlock = sp_runtime::generic::SignedBlock<Block>;
