@@ -19,7 +19,7 @@ import { KeyringPair } from '@polkadot/keyring/types';
 import { Codec } from '@polkadot/types/types';
 import { ApiTypes, SubmittableExtrinsic } from '@polkadot/api/types';
 import { HexString } from '@polkadot/util/types';
-import { hexToU8a, u8aToHex, stringToU8a, stringToHex } from '@polkadot/util';
+import { hexToU8a, u8aToHex, stringToU8a, stringToHex, u8aToU8a } from '@polkadot/util';
 import { KeyObject } from 'crypto';
 import { Event, EventRecord } from '@polkadot/types/interfaces';
 import { after, before, describe } from 'mocha';
@@ -27,7 +27,7 @@ import { generateChallengeCode, getSigner } from './web3/setup';
 import { ethers } from 'ethers';
 import { generateTestKeys } from './web3/functions';
 import { expect } from 'chai';
-
+const ed25519 = require('tweetnacl').sign;
 const base58 = require('micro-base58');
 const crypto = require('crypto');
 // in order to handle self-signed certificates we need to turn off the validation
@@ -312,11 +312,16 @@ export async function verifyMsg(data: string, publicKey: KeyObject, signature: s
     const count = await api.query.teerex.enclaveCount();
     const res = (await api.query.teerex.enclaveRegistry(count)).toHuman() as EnclaveResult;
 
-    const hash = crypto.createHash('sha256').update(res.shieldingKey).digest('hex');
-
+    const hash = crypto.createHash('blake2s256').update(stringToU8a(res.shieldingKey)).digest();
     const message = JSON.parse(data);
+    console.log(message);
     delete message.proof;
-    console.log(hash);
+    console.log(999, hash);
+    const keyPair = ed25519.keyPair.fromSeed(hash);
+    console.log('keyPair', keyPair);
+
+    const isValid = ed25519.detached.verify(stringToU8a(message), hexToU8a(`0x${signature}`), keyPair.publicKey);
+    console.log('isValid', isValid);
 
     await crypto.generateKeyPair(
         'ed25519',
@@ -329,22 +334,12 @@ export async function verifyMsg(data: string, publicKey: KeyObject, signature: s
                 type: 'pkcs8',
                 format: 'pem',
                 cipher: 'aes-256-cbc',
-
                 passphrase: hash,
             },
         },
         (err: any, publicKey: any, privateKey: any) => {
             if (err) throw err;
-
-            const verifier = crypto.createVerify('sha256');
-            verifier.update(Buffer.from(JSON.stringify(message)));
-            verifier.end();
-
-            const isVerified = verifier.verify(publicKey, signature);
-
-            console.log(`Is verified: ${isVerified}`);
-
-            console.log(crypto.verify(null, Buffer.from(JSON.stringify(message)), publicKey, Buffer.from(signature)));
+            console.log(crypto.verify(null, stringToU8a(message), publicKey, stringToU8a(signature)));
         }
     );
 }

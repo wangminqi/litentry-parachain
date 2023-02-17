@@ -36,7 +36,7 @@ describeLitentry('VC test', async (context) => {
                 }
             )) as HexString[];
 
-            await verifySignature(context.teeShieldingKey, vc.replace('0x', ''),context.substrate);
+            await verifySignature(context.teeShieldingKey, vc.replace('0x', ''), context.substrate);
             indexList.push(index);
 
             //check vc index adn vc status
