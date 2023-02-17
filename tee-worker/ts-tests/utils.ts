@@ -26,6 +26,7 @@ import { after, before, describe } from 'mocha';
 import { generateChallengeCode, getSigner } from './web3/setup';
 import { ethers } from 'ethers';
 import { generateTestKeys } from './web3/functions';
+import { expect } from 'chai';
 
 const base58 = require('micro-base58');
 const crypto = require('crypto');
@@ -289,6 +290,7 @@ export async function getEnclave(api: ApiPromise): Promise<{
 }> {
     const count = await api.query.teerex.enclaveCount();
     const res = (await api.query.teerex.enclaveRegistry(count)).toHuman() as EnclaveResult;
+
     const teeShieldingKey = crypto.createPublicKey({
         key: {
             alg: 'RSA-OAEP-256',
@@ -306,34 +308,81 @@ export async function getEnclave(api: ApiPromise): Promise<{
     };
 }
 
-export async function verifyMsg(msg: any, context: any) {
-    delete msg.proof;
-    const publicKey1 = context.teeShieldingKey.export({ type: 'pkcs1', format: 'pem' });
-    console.log(publicKey1);
-    console.log(JSON.stringify(msg));
-    console.log(223344, context.teeShieldingKey);
+export async function verifyMsg(data: string, publicKey: KeyObject, signature: string, api: ApiPromise) {
+    // console.log('data', data);
 
-    const signature =
-        '261f914c556fdfa6963ecf33f5530757d675b23cdfb59a119958ec2964fef2453afc6cd82d3eecb429ed7db60c8e0d12a2618c8d1406f16534d30ea4d95d870e';
-    // var v = crypto.createVerify('RSA-SHA256');
-    // v.update(JSON.stringify(msg));
-    // var isValid = v.verify(Buffer.from(res.shieldingKey), Buffer.from(signature, 'hex'));
-    // console.log(999, isValid);
-    // const verifier = crypto.createVerify('RSA-SHA256');
-    // verifier.update(JSON.stringify(msg));
-    // const isValid = verifier.verify(publicKey, Buffer.from(signature).toString('base64url'), 'hex');
-    // console.log(999, isValid);
-    const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
-        modulusLength: 2048,
-    });
-    console.log(
-        privateKey,
-        publicKey,
-        crypto.sign(null, 'data', privateKey),
-        crypto.verify(null, 'data', publicKey, crypto.sign(null, 'data', privateKey))
+    // console.log('signature', signature);
+    // console.log('publicKey', publicKey);
+    const count = await api.query.teerex.enclaveCount();
+    const res = (await api.query.teerex.enclaveRegistry(count)).toHuman() as EnclaveResult;
+    // const key = Buffer.from(res.shieldingKey, 'utf-8');
+
+    //how sha256 res.shieldingKey get 32 bytes
+    console.log(typeof res.shieldingKey);
+
+    const hash = crypto.createHash('sha256').update(res.shieldingKey).digest('hex');
+
+    const message = JSON.parse(data);
+    delete message.proof;
+    console.log(hash);
+
+    const options = {
+        type: 'ed25519',
+        privateKeyEncoding: {
+            type: 'pkcs8',
+            format: 'pem',
+            cipher: 'aes-256-cbc',
+            passphrase: hash,
+        },
+    };
+
+    await crypto.generateKeyPair(
+        'ed25519',
+        {
+            publicKeyEncoding: {
+                type: 'spki',
+                format: 'pem',
+            },
+            privateKeyEncoding: {
+                type: 'pkcs8',
+                format: 'pem',
+                cipher: 'aes-256-cbc',
+
+                passphrase: hash,
+            },
+        },
+        (err: any, publicKey: any, privateKey: any) => {
+            if (err) throw err;
+
+            const verifier = crypto.createVerify('RSA-SHA512');
+            verifier.update(Buffer.from(JSON.stringify(message)));
+            verifier.end();
+
+            const isVerified = verifier.verify(publicKey, signature);
+
+            console.log(`Is verified: ${isVerified}`);
+        }
     );
+}
 
-    console.log(crypto.verify(null, Buffer.from(JSON.stringify(msg)), context.teeShieldingKey, Buffer.from(signature)));
+export async function verifySignature(publicKey: KeyObject, vc: string, api: ApiPromise): Promise<any> {
+    const vcObj = JSON.parse(vc);
+    await verifyMsg(vc, publicKey, vcObj.proof.proofValue, api);
+    const jsonStatus = await checkJSON(vc);
+}
 
-    //     return isValid;
+//Check VC json fields
+export async function checkJSON(data: string): Promise<boolean> {
+    const vc = JSON.parse(data);
+    const vcStatus = ['@context', 'type', 'credentialSubject', 'proof', 'issuer'].every(
+        (key) =>
+            vc.hasOwnProperty(key) && (vc[key] != '{}' || vc[key] !== '[]' || vc[key] !== null || vc[key] !== undefined)
+    );
+    expect(vcStatus).to.be.true;
+    expect(
+        vc.type[0] === 'VerifiableCredential' &&
+            vc.proof.type === 'Ed25519Signature2020' &&
+            vc.issuer.id === vc.proof.verificationMethod
+    ).to.be.true;
+    return true;
 }

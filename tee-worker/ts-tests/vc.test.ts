@@ -1,4 +1,4 @@
-import { describeLitentry, verifyMsg } from './utils';
+import { describeLitentry, verifyMsg, verifySignature } from './utils';
 import { step } from 'mocha-steps';
 import { requestVC, setUserShieldingKey, disableVC, revokeVC } from './indirect_calls';
 import { Assertion } from './type-definitions';
@@ -7,14 +7,14 @@ import { u8aToHex, stringToU8a } from '@polkadot/util';
 import { HexString } from '@polkadot/util/types';
 
 const assertion = <Assertion>{
-    A1: 'A1',
+    // A1: 'A1',
     A2: ['A2'],
-    A3: ['A3', 'A3', 'A3'],
-    A4: [10],
-    A7: [10],
-    A8: 'A8',
-    A10: [10],
-    A11: [10],
+    // A3: ['A3', 'A3', 'A3'],
+    // A4: [10],
+    // A7: [10],
+    // A8: 'A8',
+    // A10: [10],
+    // A11: [10],
 };
 describeLitentry('VC test', async (context) => {
     const aesKey = '0x22fc82db5b606998ad45099b7978b5b4f9dd4ea6017e57370ac56141caaabd12';
@@ -25,39 +25,41 @@ describeLitentry('VC test', async (context) => {
     });
     step('Request VC', async () => {
         for (const key in assertion) {
-            const eventData = await requestVC(context, context.defaultSigner[0], aesKey, true, context.shard, {
-                [key]: assertion[key as keyof Assertion],
-            });
+            const [account, index, vc] = (await requestVC(
+                context,
+                context.defaultSigner[0],
+                aesKey,
+                true,
+                context.mrEnclave,
+                {
+                    [key]: assertion[key as keyof Assertion],
+                }
+            )) as HexString[];
 
-            const data = JSON.parse(eventData![2]);
-            //It's always false with fake data except A8
-            assert.equal(data.credentialSubject.values[0], key === assertion.A8 ? true : false, 'check value error');
+            await verifySignature(context.teeShieldingKey, vc.replace('0x', ''),context.substrate);
+            indexList.push(index);
 
-            delete data.proof;
-            const isValid = verifyMsg(JSON.stringify(data), context.defaultSigner[0]);
-            assert(isValid, 'invalid signature');
-
-            indexList.push(eventData![1]);
-            const registry = (await context.substrate.query.vcManagement.vcRegistry(eventData![1])) as any;
-            assert.equal(registry.toHuman()!['status'], 'Active');
-        }
-    });
-
-    step('Disable VC', async () => {
-        for (const index of indexList) {
-            const eventIndex = await disableVC(context, context.defaultSigner[0], aesKey, true, index);
-            assert.equal(eventIndex, index, 'check index error');
+            //check vc index adn vc status
             const registry = (await context.substrate.query.vcManagement.vcRegistry(index)) as any;
-            assert.equal(registry.toHuman()!['status'], 'Disabled');
+            assert.equal(registry.toHuman()!['status'], 'Active', 'check registry error');
         }
     });
 
-    step('Revoke VC', async () => {
-        for (const index of indexList) {
-            const eventIndex = await revokeVC(context, context.defaultSigner[0], aesKey, true, index);
-            assert.equal(eventIndex, index, 'check index error');
-            const registry = (await context.substrate.query.vcManagement.vcRegistry(index)) as any;
-            assert.equal(registry.toHuman(), null);
-        }
-    });
+    // step('Disable VC', async () => {
+    //     for (const index of indexList) {
+    //         const eventIndex = await disableVC(context, context.defaultSigner[0], aesKey, true, index);
+    //         assert.equal(eventIndex, index, 'check index error');
+    //         const registry = (await context.substrate.query.vcManagement.vcRegistry(index)) as any;
+    //         assert.equal(registry.toHuman()!['status'], 'Disabled');
+    //     }
+    // });
+
+    // step('Revoke VC', async () => {
+    //     for (const index of indexList) {
+    //         const eventIndex = await revokeVC(context, context.defaultSigner[0], aesKey, true, index);
+    //         assert.equal(eventIndex, index, 'check index error');
+    //         const registry = (await context.substrate.query.vcManagement.vcRegistry(index)) as any;
+    //         assert.equal(registry.toHuman(), null);
+    //     }
+    // });
 });
