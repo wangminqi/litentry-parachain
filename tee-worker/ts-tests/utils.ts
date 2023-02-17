@@ -309,32 +309,14 @@ export async function getEnclave(api: ApiPromise): Promise<{
 }
 
 export async function verifyMsg(data: string, publicKey: KeyObject, signature: string, api: ApiPromise) {
-    // console.log('data', data);
-
-    // console.log('signature', signature);
-    // console.log('publicKey', publicKey);
     const count = await api.query.teerex.enclaveCount();
     const res = (await api.query.teerex.enclaveRegistry(count)).toHuman() as EnclaveResult;
-    // const key = Buffer.from(res.shieldingKey, 'utf-8');
-
-    //how sha256 res.shieldingKey get 32 bytes
-    console.log(typeof res.shieldingKey);
 
     const hash = crypto.createHash('sha256').update(res.shieldingKey).digest('hex');
 
     const message = JSON.parse(data);
     delete message.proof;
     console.log(hash);
-
-    const options = {
-        type: 'ed25519',
-        privateKeyEncoding: {
-            type: 'pkcs8',
-            format: 'pem',
-            cipher: 'aes-256-cbc',
-            passphrase: hash,
-        },
-    };
 
     await crypto.generateKeyPair(
         'ed25519',
@@ -354,13 +336,15 @@ export async function verifyMsg(data: string, publicKey: KeyObject, signature: s
         (err: any, publicKey: any, privateKey: any) => {
             if (err) throw err;
 
-            const verifier = crypto.createVerify('RSA-SHA512');
+            const verifier = crypto.createVerify('sha256');
             verifier.update(Buffer.from(JSON.stringify(message)));
             verifier.end();
 
             const isVerified = verifier.verify(publicKey, signature);
 
             console.log(`Is verified: ${isVerified}`);
+
+            console.log(crypto.verify(null, Buffer.from(JSON.stringify(message)), publicKey, Buffer.from(signature)));
         }
     );
 }
