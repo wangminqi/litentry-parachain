@@ -26,7 +26,7 @@ use frame_benchmarking::benchmarks;
 use frame_system::RawOrigin;
 use pallet_teerex::Pallet as Teerex;
 use sp_runtime::traits::CheckedConversion;
-use sp_std::{borrow::ToOwned, prelude::*};
+use sp_std::prelude::*;
 use teeracle_primitives::{DataSource, OracleDataName, TradingPairString};
 
 use test_utils::{
@@ -41,7 +41,7 @@ fn ensure_not_skipping_ra_check() {
 	};
 }
 benchmarks! {
-	where_clause {  where T::AccountId: From<[u8; 32]> }
+	where_clause {  where T::AccountId: From<[u8; 32]>, T::Hash: From<[u8; 32]> }
 	update_exchange_rate {
 		ensure_not_skipping_ra_check();
 		timestamp::Pallet::<T>::set_timestamp(TEST4_SETUP.timestamp.checked_into().unwrap());
@@ -55,6 +55,7 @@ benchmarks! {
 			RawOrigin::Signed(signer.clone()).into(),
 			TEST4_SETUP.cert.to_vec(),
 			URL.to_vec(),
+			None,
 			None,
 		).unwrap();
 		let mrenclave = Teerex::<T>::enclave(1).unwrap().mr_enclave;
@@ -79,7 +80,8 @@ benchmarks! {
 			RawOrigin::Signed(signer.clone()).into(),
 			TEST4_SETUP.cert.to_vec(),
 			URL.to_vec(),
-			None
+			None,
+			None,
 		).unwrap();
 		let mrenclave = Teerex::<T>::enclave(1).unwrap().mr_enclave;
 		Teeracle::<T>::add_to_whitelist(RawOrigin::Root.into(), data_source.clone(), mrenclave).unwrap();
