@@ -30,6 +30,7 @@ import { expect } from 'chai';
 const ed25519 = require('tweetnacl').sign;
 const base58 = require('micro-base58');
 const crypto = require('crypto');
+import * as ed from '@noble/ed25519';
 // in order to handle self-signed certificates we need to turn off the validation
 // TODO add self signed certificate ??
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -316,16 +317,31 @@ export async function verifyMsg(data: string, publicKey: KeyObject, signature: s
     delete message.proof;
     console.log(111, stringToU8a(JSON.stringify(message)));
     console.log(res.vcPubkey);
+    console.log(signature);
+
+    console.log(hexToU8a(`0x${res.vcPubkey}`));
 
     const isValid = ed25519.detached.verify(
-        stringToU8a(JSON.stringify(message)),
-        hexToU8a(`0x${signature}`),
-        hexToU8a(`0x${res.vcPubkey}`)
+        Buffer.from(stringToU8a(JSON.stringify(message))),
+        Buffer.from(hexToU8a(`0x${signature}`)),
+        Buffer.from(hexToU8a(`0x${res.vcPubkey}`))
     );
     console.log('isValid', isValid);
 
     console.log(
-        signatureVerify(stringToU8a(JSON.stringify(message)), hexToU8a(`0x${signature}`), hexToU8a(`0x${res.vcPubkey}`))
+        signatureVerify(
+            Buffer.from(stringToU8a(JSON.stringify(message))),
+            Buffer.from(hexToU8a(`0x${signature}`)),
+            Buffer.from(hexToU8a(`0x${res.vcPubkey}`))
+        )
+    );
+    console.log(
+        await ed.verify(
+            hexToU8a(`0x${signature}`),
+
+            stringToU8a(JSON.stringify(message)),
+            hexToU8a(`0x${res.vcPubkey}`)
+        )
     );
 }
 
