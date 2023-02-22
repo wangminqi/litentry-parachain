@@ -3,7 +3,7 @@ import { step } from 'mocha-steps';
 import { requestVC, setUserShieldingKey, disableVC, revokeVC } from './indirect_calls';
 import { Assertion } from './type-definitions';
 import { assert } from 'chai';
-import { u8aToHex, stringToU8a } from '@polkadot/util';
+import { u8aToHex, stringToU8a, hexToU8a } from '@polkadot/util';
 import { HexString } from '@polkadot/util/types';
 
 const assertion = <Assertion>{

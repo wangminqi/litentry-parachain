@@ -14,7 +14,7 @@ import {
     WorkerRpcReturnString,
     WorkerRpcReturnValue,
 } from './type-definitions';
-import { blake2AsHex, cryptoWaitReady, signatureVerify } from '@polkadot/util-crypto';
+import { blake2AsHex, cryptoWaitReady, signatureVerify, decodeAddress } from '@polkadot/util-crypto';
 import { KeyringPair } from '@polkadot/keyring/types';
 import { Codec } from '@polkadot/types/types';
 import { ApiTypes, SubmittableExtrinsic } from '@polkadot/api/types';
@@ -314,6 +314,8 @@ export async function verifyMsg(data: string, publicKey: KeyObject, signature: s
 
     const message = JSON.parse(data);
     delete message.proof;
+    console.log(111, stringToU8a(JSON.stringify(message)));
+    console.log(res.vcPubkey);
 
     const isValid = ed25519.detached.verify(
         stringToU8a(JSON.stringify(message)),
@@ -321,6 +323,10 @@ export async function verifyMsg(data: string, publicKey: KeyObject, signature: s
         hexToU8a(`0x${res.vcPubkey}`)
     );
     console.log('isValid', isValid);
+
+    console.log(
+        signatureVerify(stringToU8a(JSON.stringify(message)), hexToU8a(`0x${signature}`), hexToU8a(`0x${res.vcPubkey}`))
+    );
 }
 
 export async function verifySignature(publicKey: KeyObject, vc: string, api: ApiPromise): Promise<any> {
