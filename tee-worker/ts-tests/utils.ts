@@ -31,6 +31,7 @@ const ed25519 = require('tweetnacl').sign;
 const base58 = require('micro-base58');
 const crypto = require('crypto');
 import * as ed from '@noble/ed25519';
+var fs = require('fs');
 // in order to handle self-signed certificates we need to turn off the validation
 // TODO add self signed certificate ??
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -314,19 +315,19 @@ export async function verifyMsg(data: string, publicKey: KeyObject, signature: s
     const res = (await api.query.teerex.enclaveRegistry(count)).toHuman() as EnclaveResult;
 
     const message = JSON.parse(data);
-    delete message.proof;
-    console.log(111, stringToU8a(JSON.stringify(message)));
+    message.proof = null;
+    console.log('message', message);
+
+    console.log(111, stringToU8a(message.toString()));
     console.log(res.vcPubkey);
     console.log(signature);
-
     console.log(hexToU8a(`0x${res.vcPubkey}`));
-
-    const isValid = ed25519.detached.verify(
-        Buffer.from(stringToU8a(JSON.stringify(message))),
-        Buffer.from(hexToU8a(`0x${signature}`)),
-        Buffer.from(hexToU8a(`0x${res.vcPubkey}`))
+    console.log(
+        [
+            191, 94, 169, 115, 219, 53, 78, 30, 84, 37, 178, 27, 53, 55, 190, 61, 15, 53, 8, 210, 146, 112, 21, 129,
+            172, 184, 215, 182, 5, 141, 163, 207,
+        ].toString()
     );
-    console.log('isValid', isValid);
 
     console.log(
         signatureVerify(
@@ -336,15 +337,35 @@ export async function verifyMsg(data: string, publicKey: KeyObject, signature: s
         )
     );
     console.log(
+        999887777,
         await ed.verify(
-            hexToU8a(`0x${signature}`),
-
-            stringToU8a(JSON.stringify(message)),
-            hexToU8a(`0x${res.vcPubkey}`)
+            Buffer.from([
+                118, 68, 138, 168, 200, 40, 39, 247, 156, 109, 172, 179, 83, 237, 155, 22, 52, 128, 17, 39, 44, 116, 24,
+                221, 166, 62, 81, 248, 155, 102, 198, 33, 228, 107, 138, 41, 60, 160, 61, 27, 235, 63, 125, 161, 190,
+                204, 30, 29, 129, 56, 206, 49, 162, 94, 119, 146, 161, 16, 58, 127, 235, 178, 116, 5,
+            ]),
+            Buffer.from(
+                stringToU8a(
+                    '{"@context":["https://www.w3.org/2018/credentials/v1","https://w3id.org/security/suites/ed25519-2020/v1"],"id":"0xdac860f8c67afd61e8546ec120a69f4a358c51c7ed260920b3a0d12cd6651658","type":["VerifiableCredential"],"credentialSubject":{"id":"d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d","description":"Identity Linked And Verified","type":"IdentityLinkedVerified","tag":["IDHub"],"assertions":[{"and":[{"src":"$has_web2_account","op":"==","dst":"true"},{"src":"$has_web3_account","op":"==","dst":"true"}]}],"values":[false],"endpoint":"https://litentry.com/parachain/extrinsic"},"issuer":{"id":"","name":"Litentry TEE Worker","shard":"9JN37EiJTNZGZRBe39zBYM9wfuwuksKQ568ECqdCZm9h"},"issuanceBlockNumber":58}'
+                )
+            ),
+            Buffer.from([
+                45, 50, 49, 160, 90, 42, 9, 66, 169, 207, 150, 180, 74, 243, 25, 52, 186, 64, 140, 99, 38, 47, 239, 6,
+                202, 130, 251, 179, 236, 221, 143, 228,
+            ])
         )
     );
 }
 
+export async function hexStringToByteArray(str: any): Promise<any> {
+    var result: any = [];
+    while (str.length >= 2) {
+        result.push(parseInt(str.substring(0, 2), 16) as any);
+        str = str.substring(2, str.length);
+    }
+
+    return result;
+}
 export async function verifySignature(publicKey: KeyObject, vc: string, api: ApiPromise): Promise<any> {
     const vcObj = JSON.parse(vc);
     await verifyMsg(vc, publicKey, vcObj.proof.proofValue, api);

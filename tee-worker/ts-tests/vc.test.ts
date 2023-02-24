@@ -7,8 +7,8 @@ import { u8aToHex, stringToU8a, hexToU8a } from '@polkadot/util';
 import { HexString } from '@polkadot/util/types';
 
 const assertion = <Assertion>{
-    // A1: 'A1',
-    A2: ['A2'],
+    A1: 'A1',
+    // A2: ['A2'],
     // A3: ['A3', 'A3', 'A3'],
     // A4: [10],
     // A7: [10],
@@ -35,6 +35,7 @@ describeLitentry('VC test', async (context) => {
                     [key]: assertion[key as keyof Assertion],
                 }
             )) as HexString[];
+            console.log(1111, JSON.parse(vc.replace('0x', '')));
 
             await verifySignature(context.teeShieldingKey, vc.replace('0x', ''), context.substrate);
             indexList.push(index);
