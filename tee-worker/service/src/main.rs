@@ -31,7 +31,7 @@ use crate::{
 	ocall_bridge::{
 		bridge_api::Bridge as OCallBridge, component_factory::OCallBridgeComponentFactory,
 	},
-	parentchain_handler::{HandleParentchain, ParentchainHandler},
+	parentchain_handler::{HandleParentchain, ParentchainHandler, REQUEST_RETRY_INTERVAL},
 	prometheus_metrics::{start_metrics_server, EnclaveMetricsReceiver, MetricsHandler},
 	sidechain_setup::{sidechain_init_block_production, sidechain_start_untrusted_rpc_server},
 	sync_block_broadcaster::SyncBlockBroadcaster,
@@ -81,6 +81,7 @@ use its_storage::{interface::FetchBlocks, BlockPruner, SidechainStorageLock};
 use lc_data_providers::DataProvidersStatic;
 use litentry_primitives::{ChallengeCode, Identity, ParentchainHeader as Header};
 use log::*;
+use parentchain_handler::REQUEST_RETRY_LIMIT;
 use serde_json::Value;
 use sgx_types::*;
 use sp_core::crypto::{AccountId32, Ss58Codec};
@@ -92,7 +93,7 @@ use std::{
 	path::PathBuf,
 	str,
 	sync::{mpsc::channel, Arc},
-	thread,
+	thread::{self, sleep},
 	time::Duration,
 };
 use substrate_api_client::{
@@ -788,26 +789,45 @@ fn subscribe_to_parentchain_new_headers<E: EnclaveBase + Sidechain>(
 	parentchain_handler: Arc<ParentchainHandler<ParentchainApi, E>>,
 	mut last_synced_header: Header,
 ) -> Result<(), Error> {
-	let (sender, receiver) = channel();
-	//TODO: this should be implemented by parentchain_handler directly, and not via
-	// exposed parentchain_api. Blocked by https://github.com/scs/substrate-api-client/issues/267.
-	parentchain_handler
-		.parentchain_api()
-		.subscribe_finalized_heads(sender)
-		.map_err(Error::ApiClient)?;
-
+	let mut i = 0;
 	loop {
-		let new_header: Header = match receiver.recv() {
-			Ok(header_str) => serde_json::from_str(&header_str).map_err(Error::Serialization),
-			Err(e) => Err(Error::ApiSubscriptionDisconnected(e)),
-		}?;
+		let (sender, receiver) = channel();
+		//TODO: this should be implemented by parentchain_handler directly, and not via
+		// exposed parentchain_api. Blocked by https://github.com/scs/substrate-api-client/issues/267.
+		match parentchain_handler.parentchain_api().subscribe_finalized_heads(sender) {
+			Ok(_) => loop {
+				let new_header: Header = match receiver.recv() {
+					Ok(header_str) =>
+						serde_json::from_str(&header_str).map_err(Error::Serialization),
+					Err(e) => {
+						if i == REQUEST_RETRY_LIMIT {
+							return Err(Error::ApiSubscriptionDisconnected(e))
+						} else {
+							i += 1;
+							warn!("seelp 10 sec");
+							sleep(REQUEST_RETRY_INTERVAL);
+							break;
+						}
+						// Err(Error::ApiSubscriptionDisconnected(e))	
+					},
+				}?;
 
-		println!(
-			"[+] Received finalized header update ({}), syncing parent chain...",
-			new_header.number
-		);
+				println!(
+					"[+] Received finalized header update ({}), syncing parent chain...",
+					new_header.number
+				);
 
-		last_synced_header = parentchain_handler.sync_parentchain(last_synced_header)?;
+				last_synced_header = parentchain_handler.sync_parentchain(last_synced_header)?;
+			},
+			Err(e) =>
+				if i == REQUEST_RETRY_LIMIT {
+					return Err(e.into())
+				} else {
+					i += 1;
+					warn!("seelp 10 sec");
+					sleep(REQUEST_RETRY_INTERVAL)
+				},
+		}
 	}
 }
 

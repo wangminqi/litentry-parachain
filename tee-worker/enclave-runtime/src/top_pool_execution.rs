@@ -68,7 +68,9 @@ use std::{sync::Arc, time::Instant, vec::Vec};
 
 #[no_mangle]
 pub unsafe extern "C" fn execute_trusted_calls() -> sgx_status_t {
+	warn!("produce block");
 	if let Err(e) = execute_top_pool_trusted_calls_internal() {
+		log::warn!("error:{:?}",e);
 		return e.into()
 	}
 
@@ -180,12 +182,12 @@ fn execute_top_pool_trusted_calls_internal() -> Result<()> {
 			log_remaining_slot_duration(&slot, "After broadcasting and sending extrinsic");
 		},
 		None => {
-			debug!("No slot yielded. Skipping block production.");
+			warn!("No slot yielded. Skipping block production.");
 			return Ok(())
 		},
 	};
 
-	debug!("End sidechain block production cycle");
+	warn!("End sidechain block production cycle");
 	Ok(())
 }
 
@@ -270,7 +272,10 @@ where
 	let xts = extrinsics_factory.create_extrinsics(opaque_calls.as_slice(), None)?;
 
 	debug!("Sending sidechain block(s) confirmation extrinsic.. ");
-	validator_access.execute_mut_on_validator(|v| v.send_extrinsics(xts))?;
+	validator_access.execute_mut_on_validator(|v| {
+		let _ = v.send_extrinsics(xts);
+		Ok(())
+	})?;
 
 	Ok(())
 }

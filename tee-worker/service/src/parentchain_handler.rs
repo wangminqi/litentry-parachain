@@ -31,10 +31,13 @@ use sp_runtime::{
 	traits::{Block, Header as HeaderTrait},
 	OpaqueExtrinsic,
 };
-use std::{cmp::min, sync::Arc};
+use std::{cmp::min, sync::Arc, thread::sleep, time::Duration};
 use substrate_api_client::{Events, Phase};
 
 const BLOCK_SYNC_BATCH_SIZE: u32 = 1000;
+
+pub const REQUEST_RETRY_INTERVAL: Duration = Duration::from_secs(10);
+pub const REQUEST_RETRY_LIMIT: u32 = 200;
 
 pub trait HandleParentchain {
 	/// Initializes all parentchain specific components on the enclave side.
@@ -129,18 +132,45 @@ where
 
 	fn sync_parentchain(&self, last_synced_header: Header) -> ServiceResult<Header> {
 		trace!("Getting current head");
-		let curr_block: SignedBlock = self
-			.parentchain_api
-			.last_finalized_block()?
-			.ok_or(Error::MissingLastFinalizedBlock)?;
+		let mut i = 0;
+
+		let curr_block: SignedBlock = loop {
+			if let Ok(Some(h)) = self.parentchain_api.last_finalized_block() {
+				i = 0;
+				break h
+			} else if i == 200 {
+				return Err(Error::MissingLastFinalizedBlock)
+			}
+			i += 1;
+			warn!("seelp 10 sec");
+			sleep(Duration::from_secs(10))
+			// .ok_or(Error::MissingLastFinalizedBlock)?
+		};
+
 		let curr_block_number = curr_block.block.header.number;
 
 		let mut until_synced_header = last_synced_header;
 		loop {
-			let mut block_chunk_to_sync = self.parentchain_api.get_blocks(
-				until_synced_header.number + 1,
-				min(until_synced_header.number + BLOCK_SYNC_BATCH_SIZE, curr_block_number),
-			)?;
+			let mut block_chunk_to_sync = loop {
+				match self.parentchain_api.get_blocks(
+					until_synced_header.number + 1,
+					min(until_synced_header.number + BLOCK_SYNC_BATCH_SIZE, curr_block_number),
+				) {
+					Ok(b) => {
+						i = 0;
+						break b
+					},
+					Err(e) =>
+						if i == 200 {
+							return Err(e.into())
+						} else {
+							i += 1;
+							warn!("seelp 10 sec");
+							sleep(Duration::from_secs(10))
+						},
+				}
+			};
+
 			println!("[+] Found {} block(s) to sync", block_chunk_to_sync.len());
 			if block_chunk_to_sync.is_empty() {
 				return Ok(until_synced_header)
@@ -155,7 +185,22 @@ where
 			// In certain cases, we may need to know which extrinsics failed or need to count which extrinsics failed
 			let mut events: Vec<Events> = vec![];
 			for block in &block_chunk_to_sync {
-				let block_events = self.parentchain_api.events(Some(block.block.hash()))?;
+				let block_events = loop {
+					match self.parentchain_api.events(Some(block.block.hash())) {
+						Ok(events) => {
+							i = 0;
+							break events
+						},
+						Err(e) =>
+							if i == 200 {
+								return Err(e.into())
+							} else {
+								i += 1;
+								warn!("seelp 10 sec");
+								sleep(Duration::from_secs(10))
+							},
+					}
+				};
 				events.push(block_events);
 			}
 			block_chunk_to_sync
