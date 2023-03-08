@@ -511,7 +511,7 @@ jobs:
         run: |
           cd tee-worker/docker
           docker compose -f docker-compose.yml -f ${{ matrix.test_name }}.yml up --no-build --exit-code-from ${{ matrix.test_name }} ${{ matrix.test_name }}
-          if [ "${{ matrix.test_name }}" = "lit-resume-worker" ]; then
+          if [ "${{ matrix.test_name }}" = "demo-sidechain" ]; then
             a=$(docker compose logs integritee-worker-1)
             echo "$a"
             old_cnt1=$(docker compose logs integritee-worker-1 2>&1 | grep ProcessedParentchainBlock | wc -l)
