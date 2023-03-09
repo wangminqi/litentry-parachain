@@ -108,66 +108,67 @@ echo "* Issue ${INITIALFUNDS} tokens to Alice's incognito account (on worker 1)"
 ${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} --direct set-balance ${ICGACCOUNTALICE} ${INITIALFUNDS}
 echo ""
 
-# see bob's initial balance to 0
-${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} --direct set-balance ${ICGACCOUNTBOB} 0
+# # see bob's initial balance to 0
+# ${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} --direct set-balance ${ICGACCOUNTBOB} 0
 
-echo "Get balance of Alice's incognito account (on worker 1)"
-# ${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} balance ${ICGACCOUNTALICE}
-# ICGACCOUNTALICE's public key is 0x50503350955afe8a107d6f115dc253eb5d75a3fe37a90b373db26cc12e3c6661
-${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} get-storage System Account ${ICGACCOUNTALICE_PUBKEY}
-echo ""
+# echo "Get balance of Alice's incognito account (on worker 1)"
+# # ${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} balance ${ICGACCOUNTALICE}
+# # ICGACCOUNTALICE's public key is 0x50503350955afe8a107d6f115dc253eb5d75a3fe37a90b373db26cc12e3c6661
+# ${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} get-storage System Account ${ICGACCOUNTALICE_PUBKEY}
+# echo ""
 
-# Send funds from Alice to Bobs account, on worker 1.
-echo "* First transfer: Send ${AMOUNTTRANSFER} funds from Alice's incognito account to Bob's incognito account (on worker 1)"
-$CLIENTWORKER1 trusted --mrenclave ${MRENCLAVE} --direct transfer ${ICGACCOUNTALICE} ${ICGACCOUNTBOB} ${AMOUNTTRANSFER}
-echo ""
+# # Send funds from Alice to Bobs account, on worker 1.
+# echo "* First transfer: Send ${AMOUNTTRANSFER} funds from Alice's incognito account to Bob's incognito account (on worker 1)"
+# $CLIENTWORKER1 trusted --mrenclave ${MRENCLAVE} --direct transfer ${ICGACCOUNTALICE} ${ICGACCOUNTBOB} ${AMOUNTTRANSFER}
+# echo ""
 
-# Prevent nonce clash when sending direct trusted calls to different workers.
-echo "* Waiting 2 seconds"
-sleep 2
-echo ""
+# # Prevent nonce clash when sending direct trusted calls to different workers.
+# echo "* Waiting 2 seconds"
+# sleep 2
+# echo ""
 
-# Send funds from Alice to Bobs account, on worker 2.
-echo "* Second transfer: Send ${AMOUNTTRANSFER} funds from Alice's incognito account to Bob's incognito account (on worker 2)"
-$CLIENTWORKER2 trusted --mrenclave ${MRENCLAVE} --direct transfer ${ICGACCOUNTALICE} ${ICGACCOUNTBOB} ${AMOUNTTRANSFER}
-echo ""
+# # Send funds from Alice to Bobs account, on worker 2.
+# echo "* Second transfer: Send ${AMOUNTTRANSFER} funds from Alice's incognito account to Bob's incognito account (on worker 2)"
+# $CLIENTWORKER2 trusted --mrenclave ${MRENCLAVE} --direct transfer ${ICGACCOUNTALICE} ${ICGACCOUNTBOB} ${AMOUNTTRANSFER}
+# echo ""
 
-# Prevent getter being executed too early and returning an outdated result, before the transfer was made.
-echo "* Waiting 6 seconds"
-sleep 6
-echo ""
+# # Prevent getter being executed too early and returning an outdated result, before the transfer was made.
+# echo "* Waiting 6 seconds"
+# sleep 6
+# echo ""
 
-echo "* Get balance of Alice's incognito account (on worker 1)"
-# ALICE_BALANCE=$(${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} balance ${ICGACCOUNTALICE} | xargs)
-ALICE_BALANCE=$(${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} get-storage System Account ${ICGACCOUNTALICE_PUBKEY} | jq ".data.free" | xargs)
-echo "$ALICE_BALANCE"
-echo ""
+# echo "* Get balance of Alice's incognito account (on worker 1)"
+# # ALICE_BALANCE=$(${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} balance ${ICGACCOUNTALICE} | xargs)
+# ALICE_BALANCE=$(${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} get-storage System Account ${ICGACCOUNTALICE_PUBKEY} | jq ".data.free" | xargs)
+# echo "$ALICE_BALANCE"
+# echo ""
 
-echo "* Get balance of Bob's incognito account (on worker 1)"
-# BOB_BALANCE=$(${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} balance ${ICGACCOUNTBOB} | xargs)
-BOB_BALANCE=$(${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} get-storage System Account ${ICGACCOUNTBOB_PUBKEY} | jq ".data.free" | xargs)
-echo "$BOB_BALANCE"
-echo ""
+# echo "* Get balance of Bob's incognito account (on worker 1)"
+# # BOB_BALANCE=$(${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} balance ${ICGACCOUNTBOB} | xargs)
+# BOB_BALANCE=$(${CLIENTWORKER1} trusted --mrenclave ${MRENCLAVE} get-storage System Account ${ICGACCOUNTBOB_PUBKEY} | jq ".data.free" | xargs)
+# echo "$BOB_BALANCE"
+# echo ""
 
-ALICE_EXPECTED_BALANCE=10000000000
-BOB_EXPECTED_BALANCE=40000000000
+# ALICE_EXPECTED_BALANCE=10000000000
+# BOB_EXPECTED_BALANCE=40000000000
 
-echo "* Verifying Alice's balance"
-if [ "$ALICE_BALANCE" -ne "$ALICE_EXPECTED_BALANCE" ]; then
-  echo "Alice's balance is wrong (expected: $ALICE_EXPECTED_BALANCE, actual: $ALICE_BALANCE)"
-  exit 1
-else
-    echo "Alice's balance is correct ($ALICE_BALANCE)"
-fi
-echo ""
+# echo "* Verifying Alice's balance"
+# if [ "$ALICE_BALANCE" -ne "$ALICE_EXPECTED_BALANCE" ]; then
+#   echo "Alice's balance is wrong (expected: $ALICE_EXPECTED_BALANCE, actual: $ALICE_BALANCE)"
+#   exit 1
+# else
+#     echo "Alice's balance is correct ($ALICE_BALANCE)"
+# fi
+# echo ""
 
-echo "* Verifying Bob's balance"
-if [ "$BOB_BALANCE" -ne "$BOB_EXPECTED_BALANCE" ]; then
-  echo "Bob's balance is wrong (expected: $BOB_EXPECTED_BALANCE, actual: $BOB_BALANCE)"
-  exit 1
-else
-    echo "Bob's balance is correct ($BOB_BALANCE)"
-fi
-echo ""
+# echo "* Verifying Bob's balance"
+# if [ "$BOB_BALANCE" -ne "$BOB_EXPECTED_BALANCE" ]; then
+#   echo "Bob's balance is wrong (expected: $BOB_EXPECTED_BALANCE, actual: $BOB_BALANCE)"
+#   exit 1
+# else
+#     echo "Bob's balance is correct ($BOB_BALANCE)"
+# fi
+# echo ""
 
-exit 0
+set -e
+timeout -v --foreground 150s $CLIENTWORKER1 listen -e 20

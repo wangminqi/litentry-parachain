@@ -511,17 +511,6 @@ jobs:
         run: |
           cd tee-worker/docker
           docker compose -f docker-compose.yml -f ${{ matrix.test_name }}.yml up --no-build --exit-code-from ${{ matrix.test_name }} ${{ matrix.test_name }}
-          if [ "${{ matrix.test_name }}" = "demo-sidechain" ]; then
-            a=$(docker compose logs integritee-worker-1)
-            echo "$a"
-            old_cnt1=$(docker compose logs integritee-worker-1 2>&1 | grep ProcessedParentchainBlock | wc -l)
-            old_cnt2=$(docker compose logs integritee-worker-2 2>&1 | grep ProcessedParentchainBlock | wc -l)
-            sleep 120
-            new_cnt1=$(docker compose logs integritee-worker-1 2>&1 | grep ProcessedParentchainBlock | wc -l)
-            new_cnt2=$(docker compose logs integritee-worker-2 2>&1 | grep ProcessedParentchainBlock | wc -l)
-            echo "worker 1: old = $old_cnt1, new = $new_cnt1"
-            echo "worker 2: old = $old_cnt2, new = $new_cnt2"
-          fi
 
       - name: Stop docker containers
         # if: needs.set-condition.outputs.run_tee_test == 'true'
