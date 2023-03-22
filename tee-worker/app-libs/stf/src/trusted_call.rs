@@ -30,7 +30,8 @@ use codec::{Decode, Encode};
 use frame_support::{ensure, traits::UnfilteredDispatchable};
 pub use ita_sgx_runtime::{Balance, ConvertAccountId, Index, SgxParentchainTypeConverter};
 use itp_node_api::metadata::{
-	pallet_imp::IMPCallIndexes, pallet_system::SystemSs58Prefix, pallet_teerex::TeerexCallIndexes,
+	pallet_pallet_ethereum_sender_dummy::EthereumSenderCallIndexes, pallet_imp::IMPCallIndexes,
+	pallet_system::SystemSs58Prefix, pallet_teerex::TeerexCallIndexes,
 	pallet_vcmp::VCMPCallIndexes, provider::AccessNodeMetadata,
 };
 use itp_stf_interface::ExecuteCall;
