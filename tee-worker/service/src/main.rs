@@ -263,7 +263,7 @@ fn main() {
 	if let Some(run_config) = &config.run_config {
 		let shard = extract_shard(&run_config.shard, enclave.as_ref());
 
-		println!("Worker Config: {:?}", config);
+		info!("Worker Config: {:?}", config);
 
 		if clean_reset {
 			setup::initialize_shard_and_keys(enclave.as_ref(), &shard).unwrap();
@@ -292,7 +292,7 @@ fn main() {
 			initialization_handler,
 		);
 	} else if let Some(smatches) = matches.subcommand_matches("request-state") {
-		println!("*** Requesting state from a registered worker \n");
+		info!("*** Requesting state from a registered worker \n");
 		let node_api =
 			node_api_factory.create_api().expect("Failed to create parentchain node API");
 		sync_state::sync_state::<_, _, WorkerModeProvider>(
@@ -321,7 +321,7 @@ fn main() {
 			enclave.dump_dcap_ra_cert_to_disk().unwrap();
 		}
 	} else if matches.is_present("mrenclave") {
-		println!("{}", enclave.get_mrenclave().unwrap().encode().to_base58());
+		info!("{}", enclave.get_mrenclave().unwrap().encode().to_base58());
 	} else if let Some(sub_matches) = matches.subcommand_matches("init-shard") {
 		setup::init_shard(
 			enclave.as_ref(),
@@ -329,16 +329,16 @@ fn main() {
 		);
 	} else if let Some(sub_matches) = matches.subcommand_matches("test") {
 		if sub_matches.is_present("provisioning-server") {
-			println!("*** Running Enclave MU-RA TLS server\n");
+			info!("*** Running Enclave MU-RA TLS server\n");
 			enclave_run_state_provisioning_server(
 				enclave.as_ref(),
 				sgx_quote_sign_type_t::SGX_UNLINKABLE_SIGNATURE,
 				&config.mu_ra_url(),
 				sub_matches.is_present("skip-ra"),
 			);
-			println!("[+] Done!");
+			info!("[+] Done!");
 		} else if sub_matches.is_present("provisioning-client") {
-			println!("*** Running Enclave MU-RA TLS client\n");
+			info!("*** Running Enclave MU-RA TLS client\n");
 			let shard = extract_shard(
 				&sub_matches.value_of("shard").map(|s| s.to_string()),
 				enclave.as_ref(),
@@ -351,7 +351,7 @@ fn main() {
 				sub_matches.is_present("skip-ra"),
 			)
 			.unwrap();
-			println!("[+] Done!");
+			info!("[+] Done!");
 		} else {
 			tests::run_enclave_tests(sub_matches);
 		}
@@ -378,12 +378,12 @@ fn main() {
 			.unwrap();
 
 		if old_shard == new_shard {
-			println!("old_shard should not be the same as new_shard");
+			info!("old_shard should not be the same as new_shard");
 		} else {
 			setup::migrate_shard(enclave.as_ref(), &old_shard, &new_shard);
 		}
 	} else {
-		println!("For options: use --help");
+		info!("For options: use --help");
 	}
 }
 
@@ -415,7 +415,7 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	let run_config = config.run_config.clone().expect("Run config missing");
 	let skip_ra = run_config.skip_ra;
 
-	println!("Integritee Worker v{}", VERSION);
+	info!("Integritee Worker v{}", VERSION);
 	info!("starting worker on shard {}", shard.encode().to_base58());
 	// ------------------------------------------------------------------------
 	// check for required files
@@ -425,12 +425,12 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	// ------------------------------------------------------------------------
 	// initialize the enclave
 	let mrenclave = enclave.get_mrenclave().unwrap();
-	println!("MRENCLAVE={}", mrenclave.to_base58());
-	println!("MRENCLAVE in hex {:?}", hex::encode(mrenclave));
+	info!("MRENCLAVE={}", mrenclave.to_base58());
+	info!("MRENCLAVE in hex {:?}", hex::encode(mrenclave));
 
 	// ------------------------------------------------------------------------
 	// let new workers call us for key provisioning
-	println!("MU-RA server listening on {}", config.mu_ra_url());
+	info!("MU-RA server listening on {}", config.mu_ra_url());
 	let is_development_mode = run_config.dev;
 	let ra_url = config.mu_ra_url();
 	let enclave_api_key_prov = enclave.clone();
@@ -452,7 +452,7 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	// ------------------------------------------------------------------------
 	// Get the public key of our TEE.
 	let tee_accountid = enclave_account(enclave.as_ref());
-	println!("Enclave account {:} ", &tee_accountid.to_ss58check());
+	info!("Enclave account {:} ", &tee_accountid.to_ss58check());
 
 	// ------------------------------------------------------------------------
 	// Start `is_initialized` server.
@@ -493,14 +493,14 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 		let direct_invocation_server_addr = config.trusted_worker_url_internal();
 		let enclave_for_direct_invocation = enclave.clone();
 		thread::spawn(move || {
-			println!(
+			info!(
 				"[+] Trusted RPC direct invocation server listening on {}",
 				direct_invocation_server_addr
 			);
 			enclave_for_direct_invocation
 				.init_direct_invocation_server(direct_invocation_server_addr)
 				.unwrap();
-			println!("[+] RPC direct invocation server shut down");
+			info!("[+] RPC direct invocation server shut down");
 		});
 	}
 
@@ -549,11 +549,11 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	// Perform a remote attestation and get an unchecked extrinsic back.
 	let trusted_url = config.trusted_worker_url_external();
 	if skip_ra {
-		println!(
+		info!(
 			"[!] skipping remote attestation. Registering enclave without attestation report."
 		);
 	} else {
-		println!("[!] creating remote attestation report and create enclave register extrinsic.");
+		info!("[!] creating remote attestation report and create enclave register extrinsic.");
 	};
 	#[cfg(not(feature = "dcap"))]
 	let uxt = enclave.generate_ias_ra_extrinsic(&trusted_url, skip_ra).unwrap();
@@ -611,10 +611,10 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 				}
 			}
 			if !found {
-				println!("[>] Register the enclave (send the extrinsic)");
+				info!("[>] Register the enclave (send the extrinsic)");
 				let register_enclave_xt_hash =
 					node_api.send_extrinsic(xthex, XtStatus::Finalized).unwrap();
-				println!("[<] Extrinsic got finalized. Hash: {:?}\n", register_enclave_xt_hash);
+				info!("[<] Extrinsic got finalized. Hash: {:?}\n", register_enclave_xt_hash);
 				register_enclave_xt_header = node_api.get_header(register_enclave_xt_hash).unwrap();
 			}
 		},
@@ -627,9 +627,9 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	}
 
 	if we_are_primary_validateer {
-		println!("[+] We are the primary validateer");
+		info!("[+] We are the primary validateer");
 	} else {
-		println!("[+] We are NOT the primary validateer");
+		info!("[+] We are NOT the primary validateer");
 	}
 
 	initialization_handler.registered_on_parentchain();
@@ -655,7 +655,7 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	}
 
 	if WorkerModeProvider::worker_mode() != WorkerMode::Teeracle {
-		println!("*** [+] Finished syncing light client, syncing parentchain...");
+		info!("*** [+] Finished syncing light client, syncing parentchain...");
 
 		// Syncing all parentchain blocks, this might take a while..
 		let mut last_synced_header =
@@ -685,7 +685,7 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 				{
 					error!("Parentchain block syncing terminated with a failure: {:?}", e);
 				}
-				println!("[!] Parentchain block syncing has terminated");
+				info!("[!] Parentchain block syncing has terminated");
 			})
 			.unwrap();
 	}
@@ -697,7 +697,7 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 
 	// ------------------------------------------------------------------------
 	// subscribe to events and react on firing
-	println!("*** Subscribing to events");
+	info!("*** Subscribing to events");
 	let (sender, receiver) = channel();
 	let metadata = node_api.metadata.clone();
 	let _ = thread::Builder::new()
@@ -707,7 +707,7 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 		})
 		.unwrap();
 
-	println!("[+] Subscribed to events. waiting...");
+	info!("[+] Subscribed to events. waiting...");
 	let timeout = Duration::from_secs(600);
 	loop {
 		if let Ok(events_str) = receiver.recv_timeout(timeout) {
@@ -742,7 +742,7 @@ fn spawn_worker_for_shard_polling<InitializationHandler>(
 			if let Ok(Some(_)) = node_api.worker_for_shard(&shard_for_initialized, None) {
 				// Set that the service is initialized.
 				initialization_handler.worker_for_shard_registered();
-				println!("[+] Found `WorkerForShard` on parentchain state");
+				info!("[+] Found `WorkerForShard` on parentchain state");
 				break
 			}
 			sleep(Duration::from_secs(POLL_INTERVAL_SECS));
@@ -780,9 +780,9 @@ fn send_extrinsic(
 		return None
 	}
 
-	println!("[>] Register the TCB info (send the extrinsic)");
+	info!("[>] Register the TCB info (send the extrinsic)");
 	let register_qe_xt_hash = api.send_extrinsic(xthex, XtStatus::Finalized).unwrap();
-	println!("[<] Extrinsic got finalized. Hash: {:?}\n", register_qe_xt_hash);
+	info!("[<] Extrinsic got finalized. Hash: {:?}\n", register_qe_xt_hash);
 	register_qe_xt_hash
 }
 
@@ -815,7 +815,7 @@ fn subscribe_to_parentchain_new_headers<E: EnclaveBase + Sidechain>(
 			Err(e) => Err(Error::ApiSubscriptionDisconnected(e)),
 		}?;
 
-		println!(
+		info!(
 			"[+] Received finalized header update ({}), syncing parent chain...",
 			new_header.number
 		);
