@@ -134,6 +134,7 @@ impl<
 				error!("[Validator] Header submission failed: {:?}", e);
 				return Err(e.into())
 			}
+			debug!("check xt inclusion on signed block");
 
 			let block = signed_block.block;
 			// Perform state updates.
@@ -141,6 +142,7 @@ impl<
 				error!("Error performing state updates upon block import");
 				return Err(e.into())
 			}
+			debug!("executor state updates");
 
 			// Execute indirect calls that were found in the extrinsics of the block,
 			// incl. shielding and unshielding.
