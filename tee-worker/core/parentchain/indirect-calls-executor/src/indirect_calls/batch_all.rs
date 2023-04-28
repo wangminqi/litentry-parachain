@@ -47,6 +47,66 @@ use itp_types::{
 use litentry_primitives::ParentchainBlockNumber;
 use sp_std::{vec, vec::Vec};
 
+pub struct BatchAllArgs {
+	calls: Vec<BatchCall>,
+}
+
+impl<Executor: IndirectExecutor> IndirectDispatch<Executor> for CreateIdentityArgs {
+	fn dispatch(&self, executor: &Executor, xt_hash: H256) -> Result<()> {
+		// we don't need to check is_target_call() again - this is guaranteed when filling Vec<BatchCall>
+		for call in self.calls {
+			match call.params {
+				SupportedBatchCallParams::SetUserShieldingKey(p) => {
+					let set_user_shielding_key = SetUserShieldingKey {};
+					let c = (call.index, p);
+					let xt = ParentchainUncheckedExtrinsic {
+						function: c,
+						signature: extrinsic.signature.clone(),
+					};
+					set_user_shielding_key.execute(executor, xt)?;
+				},
+				SupportedBatchCallParams::CreateIdentity(p) => {
+					let create_identity = CreateIdentity { block_number: self.block_number };
+					let c = (call.index, p);
+					let xt = ParentchainUncheckedExtrinsic {
+						function: c,
+						signature: extrinsic.signature.clone(),
+					};
+					create_identity.execute(executor, xt)?;
+				},
+				SupportedBatchCallParams::RemoveIdentity(p) => {
+					let remove_identity = RemoveIdentity {};
+					let c = (call.index, p);
+					let xt = ParentchainUncheckedExtrinsic {
+						function: c,
+						signature: extrinsic.signature.clone(),
+					};
+					remove_identity.execute(executor, xt)?;
+				},
+				SupportedBatchCallParams::VerifyIdentity(p) => {
+					let verify_identity = VerifyIdentity { block_number: self.block_number };
+					let c = (call.index, p);
+					let xt = ParentchainUncheckedExtrinsic {
+						function: c,
+						signature: extrinsic.signature.clone(),
+					};
+					verify_identity.execute(executor, xt)?;
+				},
+				SupportedBatchCallParams::RequestVC(p) => {
+					let request_vc = RequestVC { block_number: self.block_number };
+					let c = (call.index, p);
+					let xt = ParentchainUncheckedExtrinsic {
+						function: c,
+						signature: extrinsic.signature.clone(),
+					};
+					request_vc.execute(executor, xt)?;
+				},
+			};
+		}
+		Ok(())
+	}
+}
+
 pub(crate) struct BatchAll {
 	pub(crate) block_number: ParentchainBlockNumber,
 }
