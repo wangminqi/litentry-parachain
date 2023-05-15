@@ -20,20 +20,19 @@ compile_error!("feature \"std\" and feature \"sgx\" cannot be enabled at the sam
 #[cfg(all(not(feature = "std"), feature = "sgx"))]
 extern crate sgx_tstd as std;
 
-use crate::Result;
+use crate::*;
 use itp_stf_primitives::types::ShardIdentifier;
 use itp_types::AccountId;
 use itp_utils::stringify::account_id_to_string;
 use lc_credentials::Credential;
 use lc_data_providers::{discord_litentry::DiscordLitentryClient, vec_to_string};
-use litentry_primitives::{
-	Identity, ParameterString, ParentchainBlockNumber, VCMPError, Web2Network,
-};
 use log::*;
 use std::vec::Vec;
 
-const VC_SUBJECT_DESCRIPTION: &str = "User has commented on Discord channel with ID-Hubber role";
-const VC_SUBJECT_TYPE: &str = "ID-Hubber";
+const VC_A3_SUBJECT_DESCRIPTION: &str =
+	"The user has commented in a specific Discord channel with a specific role";
+const VC_A3_SUBJECT_TYPE: &str = "Discord Member Verification";
+const VC_A3_SUBJECT_TAG: [&str; 1] = ["Discord"];
 
 pub fn build(
 	identities: Vec<Identity>,
@@ -53,9 +52,24 @@ pub fn build(
 
 	let mut has_commented: bool = false;
 
-	let guild_id_s = vec_to_string(guild_id.to_vec()).map_err(|_| VCMPError::ParseError)?;
-	let channel_id_s = vec_to_string(channel_id.to_vec()).map_err(|_| VCMPError::ParseError)?;
-	let role_id_s = vec_to_string(role_id.to_vec()).map_err(|_| VCMPError::ParseError)?;
+	let guild_id_s = vec_to_string(guild_id.to_vec()).map_err(|_| {
+		Error::RequestVCFailed(
+			Assertion::A3(guild_id.clone(), channel_id.clone(), role_id.clone()),
+			ErrorDetail::ParseError,
+		)
+	})?;
+	let channel_id_s = vec_to_string(channel_id.to_vec()).map_err(|_| {
+		Error::RequestVCFailed(
+			Assertion::A3(guild_id.clone(), channel_id.clone(), role_id.clone()),
+			ErrorDetail::ParseError,
+		)
+	})?;
+	let role_id_s = vec_to_string(role_id.to_vec()).map_err(|_| {
+		Error::RequestVCFailed(
+			Assertion::A3(guild_id.clone(), channel_id.clone(), role_id.clone()),
+			ErrorDetail::ParseError,
+		)
+	})?;
 
 	let mut client = DiscordLitentryClient::new();
 	for identity in identities {
@@ -78,19 +92,25 @@ pub fn build(
 
 	match Credential::new_default(who, &shard.clone(), bn) {
 		Ok(mut credential_unsigned) => {
-			credential_unsigned.add_subject_info(VC_SUBJECT_DESCRIPTION, VC_SUBJECT_TYPE);
+			credential_unsigned.add_subject_info(
+				VC_A3_SUBJECT_DESCRIPTION,
+				VC_A3_SUBJECT_TYPE,
+				VC_A3_SUBJECT_TAG.to_vec(),
+			);
 			credential_unsigned.add_assertion_a3(
 				has_commented,
 				guild_id_s,
 				channel_id_s,
 				role_id_s,
 			);
-
 			Ok(credential_unsigned)
 		},
 		Err(e) => {
 			error!("Generate unsigned credential A3 failed {:?}", e);
-			Err(VCMPError::Assertion3Failed)
+			Err(Error::RequestVCFailed(
+				Assertion::A3(guild_id, channel_id, role_id),
+				e.into_error_detail(),
+			))
 		},
 	}
 }
@@ -111,7 +131,7 @@ mod tests {
 		G_DATA_PROVIDERS
 			.write()
 			.unwrap()
-			.set_discord_litentry_url("http://localhost:9527".to_string());
+			.set_discord_litentry_url("http://localhost:19527".to_string());
 		let guild_id_u: u64 = 919848390156767232;
 		let channel_id_u: u64 = 919848392035794945;
 		let role_id_u: u64 = 1034083718425493544;

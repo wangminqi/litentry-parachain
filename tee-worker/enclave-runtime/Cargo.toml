@@ -69,7 +69,7 @@ primitive-types = { version = "0.12.1", default-features = false, features = ["c
 
 # scs / integritee
 jsonrpc-core = { default-features = false, git = "https://github.com/scs/jsonrpc", branch = "no_std_v18" }
-substrate-api-client = { default-features = false, git = "https://github.com/scs/substrate-api-client.git", branch = "polkadot-v0.9.37-tag-v0.7.0" }
+substrate-api-client = { default-features = false, git = "https://github.com/scs/substrate-api-client.git", branch = "polkadot-v0.9.39-tag-v0.7.0" }
 
 # mesalock
 env_logger = { git = "https://github.com/integritee-network/env_logger-sgx" }
@@ -99,7 +99,6 @@ itc-tls-websocket-server = { path = "../core/tls-websocket-server", default-feat
 itp-attestation-handler = { path = "../core-primitives/attestation-handler", default-features = false, features = ["sgx"] }
 itp-block-import-queue = { path = "../core-primitives/block-import-queue", default-features = false, features = ["sgx"] }
 itp-component-container = { path = "../core-primitives/component-container", default-features = false, features = ["sgx"] }
-itp-enclave-scheduled = { path = "../core-primitives/sgx/enclave-scheduled", default-features = false, features = ["sgx"] }
 itp-extrinsics-factory = { path = "../core-primitives/extrinsics-factory", default-features = false, features = ["sgx"] }
 itp-hashing = { path = "../core-primitives/hashing", default-features = false }
 itp-node-api = { path = "../core-primitives/node-api", default-features = false, features = ["sgx"] }
@@ -131,16 +130,17 @@ its-sidechain = { path = "../sidechain/sidechain-crate", default-features = fals
 
 # litentry
 lc-data-providers = { path = "../litentry/core/data-providers", default-features = false, features = ["sgx"] }
+lc-scheduled-enclave = { path = "../litentry/core/scheduled-enclave", default-features = false, features = ["sgx"] }
 lc-stf-task-receiver = { path = "../litentry/core/stf-task/receiver", default-features = false, features = ["sgx"] }
 lc-stf-task-sender = { path = "../litentry/core/stf-task/sender", default-features = false, features = ["sgx"] }
 litentry-primitives = { path = "../litentry/primitives", default-features = false, features = ["sgx"] }
 
 # substrate deps
-frame-support = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.37" }
-frame-system = { optional = true, default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.37" }
-sp-core = { default-features = false, features = ["full_crypto"], git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.37" }
-sp-runtime = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.37" }
-sp-std = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.37" }
+frame-support = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.39" }
+frame-system = { optional = true, default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.39" }
+sp-core = { default-features = false, features = ["full_crypto"], git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.39" }
+sp-runtime = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.39" }
+sp-std = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.39" }
 
 [patch.crates-io]
 env_logger = { git = "https://github.com/integritee-network/env_logger-sgx" }

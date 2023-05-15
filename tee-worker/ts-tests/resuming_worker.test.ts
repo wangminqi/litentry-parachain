@@ -1,12 +1,12 @@
 import { ChildProcess, spawn } from 'child_process';
 import fs from 'fs';
-import { initWorkerConnection, sleep } from './utils';
+import { initWorkerConnection, sleep } from './common/utils';
 import * as path from 'path';
 import * as process from 'process';
 import { describe } from 'mocha';
 import { step } from 'mocha-steps';
 import { assert } from 'chai';
-import WebSocketAsPromised = require('websocket-as-promised');
+import WebSocketAsPromised from 'websocket-as-promised';
 
 export type WorkerConfig = {
     untrusted_ws_port: number;
@@ -85,13 +85,13 @@ async function launchWorker(
         fs.closeSync(fs.openSync(`${working_dir}/key.txt`, 'w'));
         let data = JSON.stringify(
             {
-                twitter_official_url: 'http://localhost:9527',
-                twitter_litentry_url: 'http://localhost:9527',
+                twitter_official_url: 'http://localhost:19527',
+                twitter_litentry_url: 'http://localhost:19527',
                 twitter_auth_token: '',
-                discord_official_url: 'http://localhost:9527',
-                discord_litentry_url: 'http://localhost:9527',
+                discord_official_url: 'http://localhost:19527',
+                discord_litentry_url: 'http://localhost:19527',
                 discord_auth_token: '',
-                graphql_url: 'http://localhost:9527',
+                graphql_url: 'http://localhost:19527',
                 graphql_auth_key: '',
             },
             null,

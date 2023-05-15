@@ -18,16 +18,26 @@ use crate::{mock::*, AesOutput, Assertion, Error, ShardIdentifier, Status};
 use frame_support::{assert_noop, assert_ok};
 use sp_core::H256;
 
-const TEST_MRENCLAVE: [u8; 32] = [2u8; 32];
+use test_utils::ias::consts::{TEST8_MRENCLAVE, TEST8_SIGNER_PUB};
 const VC_HASH: H256 = H256::zero();
 const VC_INDEX: H256 = H256::zero();
+
+type SystemAccountId = <Test as frame_system::Config>::AccountId;
+const ALICE_PUBKEY: &[u8; 32] = &[1u8; 32];
+const BOB_PUBKEY: &[u8; 32] = &[2u8; 32];
 
 #[test]
 fn request_vc_works() {
 	new_test_ext().execute_with(|| {
-		let shard: ShardIdentifier = H256::from_slice(&TEST_MRENCLAVE);
-		assert_ok!(VCManagement::request_vc(RuntimeOrigin::signed(1), shard, Assertion::A1));
+		let shard: ShardIdentifier = H256::from_slice(&TEST8_MRENCLAVE);
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
+		assert_ok!(VCManagement::request_vc(
+			RuntimeOrigin::signed(alice.clone()),
+			shard,
+			Assertion::A1
+		));
 		System::assert_last_event(RuntimeEvent::VCManagement(crate::Event::VCRequested {
+			account: alice,
 			shard,
 			assertion: Assertion::A1,
 		}));
@@ -37,16 +47,21 @@ fn request_vc_works() {
 #[test]
 fn vc_issued_works() {
 	new_test_ext().execute_with(|| {
+		let teerex_signer: SystemAccountId = test_utils::get_signer(TEST8_SIGNER_PUB);
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
 		assert_ok!(VCManagement::vc_issued(
-			RuntimeOrigin::signed(1),
-			1,
+			RuntimeOrigin::signed(teerex_signer),
+			alice.clone(),
+			Assertion::A1,
 			VC_INDEX,
 			VC_HASH,
 			AesOutput::default(),
+			H256::default(),
 		));
 		assert!(VCManagement::vc_registry(VC_INDEX).is_some());
 		let context = VCManagement::vc_registry(VC_INDEX).unwrap();
-		assert_eq!(context.subject, 1);
+		assert_eq!(context.subject, alice);
+		assert_eq!(context.assertion, Assertion::A1);
 		assert_eq!(context.status, Status::Active);
 	});
 }
@@ -54,13 +69,17 @@ fn vc_issued_works() {
 #[test]
 fn vc_issued_with_unpriviledged_origin_fails() {
 	new_test_ext().execute_with(|| {
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
+		let bob: SystemAccountId = test_utils::get_signer(BOB_PUBKEY);
 		assert_noop!(
 			VCManagement::vc_issued(
-				RuntimeOrigin::signed(2),
-				1,
+				RuntimeOrigin::signed(bob),
+				alice,
+				Assertion::A1,
 				H256::default(),
 				H256::default(),
 				AesOutput::default(),
+				H256::default(),
 			),
 			sp_runtime::DispatchError::BadOrigin
 		);
@@ -70,20 +89,26 @@ fn vc_issued_with_unpriviledged_origin_fails() {
 #[test]
 fn vc_issued_with_duplicated_index_fails() {
 	new_test_ext().execute_with(|| {
+		let teerex_signer: SystemAccountId = test_utils::get_signer(TEST8_SIGNER_PUB);
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
 		assert_ok!(VCManagement::vc_issued(
-			RuntimeOrigin::signed(1),
-			1,
+			RuntimeOrigin::signed(teerex_signer.clone()),
+			alice.clone(),
+			Assertion::A1,
 			VC_INDEX,
 			VC_HASH,
 			AesOutput::default(),
+			H256::default(),
 		));
 		assert_noop!(
 			VCManagement::vc_issued(
-				RuntimeOrigin::signed(1),
-				1,
+				RuntimeOrigin::signed(teerex_signer),
+				alice,
+				Assertion::A1,
 				VC_INDEX,
 				VC_HASH,
 				AesOutput::default(),
+				H256::default(),
 			),
 			Error::<Test>::VCAlreadyExists
 		);
@@ -93,15 +118,19 @@ fn vc_issued_with_duplicated_index_fails() {
 #[test]
 fn disable_vc_works() {
 	new_test_ext().execute_with(|| {
+		let teerex_signer: SystemAccountId = test_utils::get_signer(TEST8_SIGNER_PUB);
+		let bob: SystemAccountId = test_utils::get_signer(BOB_PUBKEY);
 		assert_ok!(VCManagement::vc_issued(
-			RuntimeOrigin::signed(1),
-			2,
+			RuntimeOrigin::signed(teerex_signer),
+			bob.clone(),
+			Assertion::A1,
 			VC_INDEX,
 			VC_HASH,
 			AesOutput::default(),
+			H256::default(),
 		));
 		assert!(VCManagement::vc_registry(VC_INDEX).is_some());
-		assert_ok!(VCManagement::disable_vc(RuntimeOrigin::signed(2), VC_INDEX));
+		assert_ok!(VCManagement::disable_vc(RuntimeOrigin::signed(bob), VC_INDEX));
 		// vc is not deleted
 		assert!(VCManagement::vc_registry(VC_INDEX).is_some());
 		let context = VCManagement::vc_registry(VC_INDEX).unwrap();
@@ -112,25 +141,31 @@ fn disable_vc_works() {
 #[test]
 fn disable_vc_with_non_existent_vc_event() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(VCManagement::disable_vc(RuntimeOrigin::signed(1), VC_INDEX));
-		System::assert_last_event(RuntimeEvent::VCManagement(crate::Event::VCNotExist {
-			index: VC_INDEX,
-		}));
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
+		assert_noop!(
+			VCManagement::disable_vc(RuntimeOrigin::signed(alice), VC_INDEX),
+			Error::<Test>::VCNotExist
+		);
 	});
 }
 
 #[test]
 fn disable_vc_with_other_subject_fails() {
 	new_test_ext().execute_with(|| {
+		let teerex_signer: SystemAccountId = test_utils::get_signer(TEST8_SIGNER_PUB);
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
+		let bob: SystemAccountId = test_utils::get_signer(BOB_PUBKEY);
 		assert_ok!(VCManagement::vc_issued(
-			RuntimeOrigin::signed(1),
-			2,
+			RuntimeOrigin::signed(teerex_signer),
+			bob,
+			Assertion::A1,
 			VC_INDEX,
 			VC_HASH,
 			AesOutput::default(),
+			H256::default(),
 		));
 		assert_noop!(
-			VCManagement::disable_vc(RuntimeOrigin::signed(1), VC_HASH),
+			VCManagement::disable_vc(RuntimeOrigin::signed(alice), VC_HASH),
 			Error::<Test>::VCSubjectMismatch
 		);
 
@@ -141,15 +176,19 @@ fn disable_vc_with_other_subject_fails() {
 #[test]
 fn revoke_vc_works() {
 	new_test_ext().execute_with(|| {
+		let teerex_signer: SystemAccountId = test_utils::get_signer(TEST8_SIGNER_PUB);
+		let bob: SystemAccountId = test_utils::get_signer(BOB_PUBKEY);
 		assert_ok!(VCManagement::vc_issued(
-			RuntimeOrigin::signed(1),
-			2,
+			RuntimeOrigin::signed(teerex_signer),
+			bob.clone(),
+			Assertion::A1,
 			VC_INDEX,
 			VC_HASH,
 			AesOutput::default(),
+			H256::default(),
 		));
 		assert!(VCManagement::vc_registry(VC_INDEX).is_some());
-		assert_ok!(VCManagement::revoke_vc(RuntimeOrigin::signed(2), VC_INDEX));
+		assert_ok!(VCManagement::revoke_vc(RuntimeOrigin::signed(bob), VC_INDEX));
 		// vc is deleted
 		assert!(VCManagement::vc_registry(VC_INDEX).is_none());
 	});
@@ -158,8 +197,9 @@ fn revoke_vc_works() {
 #[test]
 fn revokevc_with_non_existent_vc_fails() {
 	new_test_ext().execute_with(|| {
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
 		assert_noop!(
-			VCManagement::revoke_vc(RuntimeOrigin::signed(1), VC_INDEX),
+			VCManagement::revoke_vc(RuntimeOrigin::signed(alice), VC_INDEX),
 			Error::<Test>::VCNotExist
 		);
 	});
@@ -168,15 +208,20 @@ fn revokevc_with_non_existent_vc_fails() {
 #[test]
 fn revoke_vc_with_other_subject_fails() {
 	new_test_ext().execute_with(|| {
+		let teerex_signer: SystemAccountId = test_utils::get_signer(TEST8_SIGNER_PUB);
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
+		let bob: SystemAccountId = test_utils::get_signer(BOB_PUBKEY);
 		assert_ok!(VCManagement::vc_issued(
-			RuntimeOrigin::signed(1),
-			2,
+			RuntimeOrigin::signed(teerex_signer),
+			bob,
+			Assertion::A1,
 			VC_INDEX,
 			VC_HASH,
 			AesOutput::default(),
+			H256::default(),
 		));
 		assert_noop!(
-			VCManagement::revoke_vc(RuntimeOrigin::signed(1), VC_HASH),
+			VCManagement::revoke_vc(RuntimeOrigin::signed(alice), VC_HASH),
 			Error::<Test>::VCSubjectMismatch
 		);
 		assert_eq!(VCManagement::vc_registry(VC_INDEX).unwrap().status, Status::Active);
@@ -184,40 +229,50 @@ fn revoke_vc_with_other_subject_fails() {
 }
 
 #[test]
-fn set_schema_admin_works() {
+fn set_admin_works() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(VCManagement::schema_admin().unwrap(), 1);
-		assert_ok!(VCManagement::set_schema_admin(RuntimeOrigin::signed(1), 2));
-		assert_eq!(VCManagement::schema_admin().unwrap(), 2);
-		System::assert_last_event(RuntimeEvent::VCManagement(crate::Event::SchemaAdminChanged {
-			old_admin: Some(1),
-			new_admin: Some(2),
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
+		let bob: SystemAccountId = test_utils::get_signer(BOB_PUBKEY);
+		assert_eq!(VCManagement::admin().unwrap(), alice);
+		assert_ok!(VCManagement::set_admin(RuntimeOrigin::root(), bob.clone()));
+		assert_eq!(VCManagement::admin().unwrap(), bob);
+		System::assert_last_event(RuntimeEvent::VCManagement(crate::Event::AdminChanged {
+			old_admin: Some(alice),
+			new_admin: Some(bob),
 		}));
 	});
 }
 
 #[test]
-fn set_schema_admin_fails_with_unprivileged_origin() {
+fn set_admin_fails_with_unprivileged_origin() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(VCManagement::schema_admin().unwrap(), 1);
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
+		let bob: SystemAccountId = test_utils::get_signer(BOB_PUBKEY);
+		assert_eq!(VCManagement::admin().unwrap(), alice);
 		assert_noop!(
-			VCManagement::set_schema_admin(RuntimeOrigin::signed(2), 2),
+			VCManagement::set_admin(RuntimeOrigin::signed(bob.clone()), bob),
 			sp_runtime::DispatchError::BadOrigin
 		);
-		assert_eq!(VCManagement::schema_admin().unwrap(), 1);
+		assert_eq!(VCManagement::admin().unwrap(), alice);
 	});
 }
 
 #[test]
 fn add_schema_works() {
 	new_test_ext().execute_with(|| {
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
 		assert_eq!(VCManagement::schema_index(), 0);
 		let id: Vec<u8> = vec![1, 2, 3, 4];
 		let content: Vec<u8> = vec![5, 6, 7, 8];
-		let shard: ShardIdentifier = H256::from_slice(&TEST_MRENCLAVE);
-		assert_ok!(VCManagement::add_schema(RuntimeOrigin::signed(1), shard, id, content));
+		let shard: ShardIdentifier = H256::from_slice(&TEST8_MRENCLAVE);
+		assert_ok!(VCManagement::add_schema(
+			RuntimeOrigin::signed(alice.clone()),
+			shard,
+			id,
+			content
+		));
 		System::assert_last_event(RuntimeEvent::VCManagement(crate::Event::SchemaIssued {
-			account: 1,
+			account: alice,
 			shard,
 			index: 0,
 		}));
@@ -228,12 +283,13 @@ fn add_schema_works() {
 #[test]
 fn add_schema_with_unpriviledged_origin_fails() {
 	new_test_ext().execute_with(|| {
+		let bob: SystemAccountId = test_utils::get_signer(BOB_PUBKEY);
 		let id: Vec<u8> = vec![1, 2, 3, 4];
 		let content: Vec<u8> = vec![5, 6, 7, 8];
-		let shard: ShardIdentifier = H256::from_slice(&TEST_MRENCLAVE);
+		let shard: ShardIdentifier = H256::from_slice(&TEST8_MRENCLAVE);
 		assert_noop!(
-			VCManagement::add_schema(RuntimeOrigin::signed(2), shard, id, content),
-			Error::<Test>::RequireSchemaAdmin
+			VCManagement::add_schema(RuntimeOrigin::signed(bob), shard, id, content),
+			Error::<Test>::RequireAdmin
 		);
 	});
 }
@@ -241,19 +297,25 @@ fn add_schema_with_unpriviledged_origin_fails() {
 #[test]
 fn add_two_schemas_works() {
 	new_test_ext().execute_with(|| {
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
 		assert_eq!(VCManagement::schema_index(), 0);
 		let id: Vec<u8> = vec![1, 2, 3, 4];
 		let content: Vec<u8> = vec![5, 6, 7, 8];
-		let shard: ShardIdentifier = H256::from_slice(&TEST_MRENCLAVE);
+		let shard: ShardIdentifier = H256::from_slice(&TEST8_MRENCLAVE);
 		assert_ok!(VCManagement::add_schema(
-			RuntimeOrigin::signed(1),
+			RuntimeOrigin::signed(alice.clone()),
 			shard,
 			id.clone(),
 			content.clone()
 		));
-		assert_ok!(VCManagement::add_schema(RuntimeOrigin::signed(1), shard, id, content));
+		assert_ok!(VCManagement::add_schema(
+			RuntimeOrigin::signed(alice.clone()),
+			shard,
+			id,
+			content
+		));
 		System::assert_last_event(RuntimeEvent::VCManagement(crate::Event::SchemaIssued {
-			account: 1,
+			account: alice,
 			shard,
 			index: 1,
 		}));
@@ -264,12 +326,18 @@ fn add_two_schemas_works() {
 #[test]
 fn disable_schema_works() {
 	new_test_ext().execute_with(|| {
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
 		let id: Vec<u8> = vec![1, 2, 3, 4];
 		let content: Vec<u8> = vec![5, 6, 7, 8];
-		let shard: ShardIdentifier = H256::from_slice(&TEST_MRENCLAVE);
-		assert_ok!(VCManagement::add_schema(RuntimeOrigin::signed(1), shard, id, content));
+		let shard: ShardIdentifier = H256::from_slice(&TEST8_MRENCLAVE);
+		assert_ok!(VCManagement::add_schema(
+			RuntimeOrigin::signed(alice.clone()),
+			shard,
+			id,
+			content
+		));
 		assert!(VCManagement::schema_registry(0).is_some());
-		assert_ok!(VCManagement::disable_schema(RuntimeOrigin::signed(1), shard, 0));
+		assert_ok!(VCManagement::disable_schema(RuntimeOrigin::signed(alice), shard, 0));
 		assert!(VCManagement::schema_registry(0).is_some());
 		let context = VCManagement::schema_registry(0).unwrap();
 		assert_eq!(context.status, Status::Disabled);
@@ -279,9 +347,10 @@ fn disable_schema_works() {
 #[test]
 fn disable_schema_with_non_existent_fails() {
 	new_test_ext().execute_with(|| {
-		let shard: ShardIdentifier = H256::from_slice(&TEST_MRENCLAVE);
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
+		let shard: ShardIdentifier = H256::from_slice(&TEST8_MRENCLAVE);
 		assert_noop!(
-			VCManagement::disable_schema(RuntimeOrigin::signed(1), shard, 2),
+			VCManagement::disable_schema(RuntimeOrigin::signed(alice), shard, 2),
 			Error::<Test>::SchemaNotExists
 		);
 	});
@@ -290,13 +359,15 @@ fn disable_schema_with_non_existent_fails() {
 #[test]
 fn disable_schema_with_unpriviledged_origin_fails() {
 	new_test_ext().execute_with(|| {
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
+		let bob: SystemAccountId = test_utils::get_signer(BOB_PUBKEY);
 		let id: Vec<u8> = vec![1, 2, 3, 4];
 		let content: Vec<u8> = vec![5, 6, 7, 8];
-		let shard: ShardIdentifier = H256::from_slice(&TEST_MRENCLAVE);
-		assert_ok!(VCManagement::add_schema(RuntimeOrigin::signed(1), shard, id, content));
+		let shard: ShardIdentifier = H256::from_slice(&TEST8_MRENCLAVE);
+		assert_ok!(VCManagement::add_schema(RuntimeOrigin::signed(alice), shard, id, content));
 		assert_noop!(
-			VCManagement::disable_schema(RuntimeOrigin::signed(2), shard, 0),
-			Error::<Test>::RequireSchemaAdmin
+			VCManagement::disable_schema(RuntimeOrigin::signed(bob), shard, 0),
+			Error::<Test>::RequireAdmin
 		);
 	});
 }
@@ -304,16 +375,22 @@ fn disable_schema_with_unpriviledged_origin_fails() {
 #[test]
 fn activate_schema_works() {
 	new_test_ext().execute_with(|| {
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
 		let id: Vec<u8> = vec![1, 2, 3, 4];
 		let content: Vec<u8> = vec![5, 6, 7, 8];
-		let shard: ShardIdentifier = H256::from_slice(&TEST_MRENCLAVE);
-		assert_ok!(VCManagement::add_schema(RuntimeOrigin::signed(1), shard, id, content));
+		let shard: ShardIdentifier = H256::from_slice(&TEST8_MRENCLAVE);
+		assert_ok!(VCManagement::add_schema(
+			RuntimeOrigin::signed(alice.clone()),
+			shard,
+			id,
+			content
+		));
 		assert!(VCManagement::schema_registry(0).is_some());
-		assert_ok!(VCManagement::disable_schema(RuntimeOrigin::signed(1), shard, 0));
+		assert_ok!(VCManagement::disable_schema(RuntimeOrigin::signed(alice.clone()), shard, 0));
 		// schema is disabled
 		assert_eq!(VCManagement::schema_registry(0).unwrap().status, Status::Disabled);
 		// schema is activated
-		assert_ok!(VCManagement::activate_schema(RuntimeOrigin::signed(1), shard, 0));
+		assert_ok!(VCManagement::activate_schema(RuntimeOrigin::signed(alice), shard, 0));
 		assert_eq!(VCManagement::schema_registry(0).unwrap().status, Status::Active);
 	});
 }
@@ -321,13 +398,19 @@ fn activate_schema_works() {
 #[test]
 fn activate_already_activated_schema_fails() {
 	new_test_ext().execute_with(|| {
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
 		let id: Vec<u8> = vec![1, 2, 3, 4];
 		let content: Vec<u8> = vec![5, 6, 7, 8];
-		let shard: ShardIdentifier = H256::from_slice(&TEST_MRENCLAVE);
-		assert_ok!(VCManagement::add_schema(RuntimeOrigin::signed(1), shard, id, content));
+		let shard: ShardIdentifier = H256::from_slice(&TEST8_MRENCLAVE);
+		assert_ok!(VCManagement::add_schema(
+			RuntimeOrigin::signed(alice.clone()),
+			shard,
+			id,
+			content
+		));
 		assert!(VCManagement::schema_registry(0).is_some());
 		assert_noop!(
-			VCManagement::activate_schema(RuntimeOrigin::signed(1), shard, 0),
+			VCManagement::activate_schema(RuntimeOrigin::signed(alice), shard, 0),
 			Error::<Test>::SchemaAlreadyActivated
 		);
 	});
@@ -336,12 +419,18 @@ fn activate_already_activated_schema_fails() {
 #[test]
 fn revoke_schema_works() {
 	new_test_ext().execute_with(|| {
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
 		let id: Vec<u8> = vec![1, 2, 3, 4];
 		let content: Vec<u8> = vec![5, 6, 7, 8];
-		let shard: ShardIdentifier = H256::from_slice(&TEST_MRENCLAVE);
-		assert_ok!(VCManagement::add_schema(RuntimeOrigin::signed(1), shard, id, content));
+		let shard: ShardIdentifier = H256::from_slice(&TEST8_MRENCLAVE);
+		assert_ok!(VCManagement::add_schema(
+			RuntimeOrigin::signed(alice.clone()),
+			shard,
+			id,
+			content
+		));
 		assert!(VCManagement::schema_registry(0).is_some());
-		assert_ok!(VCManagement::revoke_schema(RuntimeOrigin::signed(1), shard, 0));
+		assert_ok!(VCManagement::revoke_schema(RuntimeOrigin::signed(alice), shard, 0));
 		// schema is deleted
 		assert!(VCManagement::schema_registry(0).is_none());
 	});
@@ -350,9 +439,10 @@ fn revoke_schema_works() {
 #[test]
 fn revoke_schema_with_non_existent_fails() {
 	new_test_ext().execute_with(|| {
-		let shard: ShardIdentifier = H256::from_slice(&TEST_MRENCLAVE);
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
+		let shard: ShardIdentifier = H256::from_slice(&TEST8_MRENCLAVE);
 		assert_noop!(
-			VCManagement::revoke_schema(RuntimeOrigin::signed(1), shard, 2),
+			VCManagement::revoke_schema(RuntimeOrigin::signed(alice), shard, 2),
 			Error::<Test>::SchemaNotExists
 		);
 	});
@@ -361,13 +451,110 @@ fn revoke_schema_with_non_existent_fails() {
 #[test]
 fn revoke_schema_with_unprivileged_origin_fails() {
 	new_test_ext().execute_with(|| {
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
+		let bob: SystemAccountId = test_utils::get_signer(BOB_PUBKEY);
 		let id: Vec<u8> = vec![1, 2, 3, 4];
 		let content: Vec<u8> = vec![5, 6, 7, 8];
-		let shard: ShardIdentifier = H256::from_slice(&TEST_MRENCLAVE);
-		assert_ok!(VCManagement::add_schema(RuntimeOrigin::signed(1), shard, id, content));
+		let shard: ShardIdentifier = H256::from_slice(&TEST8_MRENCLAVE);
+		assert_ok!(VCManagement::add_schema(RuntimeOrigin::signed(alice), shard, id, content));
 		assert_noop!(
-			VCManagement::revoke_schema(RuntimeOrigin::signed(2), shard, 0),
-			Error::<Test>::RequireSchemaAdmin
+			VCManagement::revoke_schema(RuntimeOrigin::signed(bob), shard, 0),
+			Error::<Test>::RequireAdmin
 		);
+	});
+}
+
+#[test]
+fn manual_add_remove_vc_registry_item_works() {
+	new_test_ext().execute_with(|| {
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
+		let bob: SystemAccountId = test_utils::get_signer(BOB_PUBKEY);
+		// Can not remove non-existing vc
+		assert_noop!(
+			VCManagement::remove_vc_registry_item(RuntimeOrigin::signed(alice.clone()), VC_INDEX),
+			Error::<Test>::VCNotExist
+		);
+		// Unauthorized party can not add vc
+		assert_noop!(
+			VCManagement::add_vc_registry_item(
+				RuntimeOrigin::signed(bob.clone()),
+				VC_INDEX,
+				bob.clone(),
+				Assertion::A1,
+				VC_HASH
+			),
+			Error::<Test>::RequireAdmin
+		);
+		// Successfully add vc
+		assert_ok!(VCManagement::add_vc_registry_item(
+			RuntimeOrigin::signed(alice.clone()),
+			VC_INDEX,
+			alice.clone(),
+			Assertion::A1,
+			VC_HASH
+		));
+		// Check result
+		assert!(VCManagement::vc_registry(VC_INDEX).is_some());
+		System::assert_last_event(RuntimeEvent::VCManagement(crate::Event::VCRegistryItemAdded {
+			account: alice.clone(),
+			assertion: Assertion::A1,
+			index: VC_INDEX,
+		}));
+		// Unauthorized party can not remove vc
+		assert_noop!(
+			VCManagement::remove_vc_registry_item(RuntimeOrigin::signed(bob), VC_INDEX),
+			Error::<Test>::RequireAdmin
+		);
+		// Successfully remove vc
+		assert_ok!(VCManagement::remove_vc_registry_item(RuntimeOrigin::signed(alice), VC_INDEX));
+		// Check result and events
+		assert!(VCManagement::vc_registry(VC_INDEX).is_none());
+		System::assert_last_event(RuntimeEvent::VCManagement(
+			crate::Event::VCRegistryItemRemoved { index: VC_INDEX },
+		));
+	});
+}
+
+#[test]
+fn manual_add_clear_vc_registry_item_works() {
+	new_test_ext().execute_with(|| {
+		let alice: SystemAccountId = test_utils::get_signer(ALICE_PUBKEY);
+		let bob: SystemAccountId = test_utils::get_signer(BOB_PUBKEY);
+		// Unauthorized party can not add vc
+		assert_noop!(
+			VCManagement::add_vc_registry_item(
+				RuntimeOrigin::signed(bob.clone()),
+				VC_INDEX,
+				bob.clone(),
+				Assertion::A1,
+				VC_HASH
+			),
+			Error::<Test>::RequireAdmin
+		);
+		// Successfully add vc
+		assert_ok!(VCManagement::add_vc_registry_item(
+			RuntimeOrigin::signed(alice.clone()),
+			VC_INDEX,
+			alice.clone(),
+			Assertion::A1,
+			VC_HASH
+		));
+		// Check result
+		assert!(VCManagement::vc_registry(VC_INDEX).is_some());
+		System::assert_last_event(RuntimeEvent::VCManagement(crate::Event::VCRegistryItemAdded {
+			account: alice.clone(),
+			assertion: Assertion::A1,
+			index: VC_INDEX,
+		}));
+		// Unauthorized party can not clear vc
+		assert_noop!(
+			VCManagement::clear_vc_registry(RuntimeOrigin::signed(bob)),
+			Error::<Test>::RequireAdmin
+		);
+		// Successfully clear vc
+		assert_ok!(VCManagement::clear_vc_registry(RuntimeOrigin::signed(alice)));
+		// Check result and events
+		assert!(VCManagement::vc_registry(VC_INDEX).is_none());
+		System::assert_last_event(RuntimeEvent::VCManagement(crate::Event::VCRegistryCleared));
 	});
 }

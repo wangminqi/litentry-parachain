@@ -39,12 +39,16 @@ use crate::{
 	rpc::worker_api_direct::sidechain_io_handler,
 	utils::{
 		get_node_metadata_repository_from_solo_or_parachain,
-		get_triggered_dispatcher_from_solo_or_parachain, utf8_str_from_raw, DecodeRaw,
+		get_triggered_dispatcher_from_solo_or_parachain,
+		get_validator_accessor_from_solo_or_parachain, utf8_str_from_raw, DecodeRaw,
 	},
 };
 use codec::{alloc::string::String, Decode};
-use itc_parentchain::block_import_dispatcher::{
-	triggered_dispatcher::TriggerParentchainBlockImport, DispatchBlockImport,
+use itc_parentchain::{
+	block_import_dispatcher::{
+		triggered_dispatcher::TriggerParentchainBlockImport, DispatchBlockImport,
+	},
+	light_client::{concurrent_access::ValidatorAccess, Validator},
 };
 use itp_block_import_queue::PushToBlockQueue;
 use itp_component_container::ComponentGetter;
@@ -385,6 +389,23 @@ pub unsafe extern "C" fn sync_parentchain(
 	sgx_status_t::SGX_SUCCESS
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn ignore_parentchain_block_import_validation_until(
+	until: *const u32,
+) -> sgx_status_t {
+	let va = match get_validator_accessor_from_solo_or_parachain() {
+		Ok(r) => r,
+		Err(e) => {
+			error!("Can't get validator accessor: {:?}", e);
+			return sgx_status_t::SGX_ERROR_UNEXPECTED
+		},
+	};
+
+	let _ = va.execute_mut_on_validator(|v| v.set_ignore_validation_until(*until));
+
+	sgx_status_t::SGX_SUCCESS
+}
+
 /// Dispatch the parentchain blocks for import.
 /// Depending on the worker mode, a different dispatcher is used:
 ///
@@ -434,4 +455,18 @@ fn internal_trigger_parentchain_block_import() -> Result<()> {
 	let triggered_import_dispatcher = get_triggered_dispatcher_from_solo_or_parachain()?;
 	triggered_import_dispatcher.import_all()?;
 	Ok(())
+}
+
+// This is required, because `ring` / `ring-xous` would not compile without it non-release (debug) mode.
+// See #1200 for more details.
+#[cfg(debug_assertions)]
+#[no_mangle]
+pub extern "C" fn __assert_fail(
+	__assertion: *const u8,
+	__file: *const u8,
+	__line: u32,
+	__function: *const u8,
+) -> ! {
+	use core::intrinsics::abort;
+	abort()
 }

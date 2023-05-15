@@ -26,13 +26,13 @@ help:
 
 # build release
 
-.PHONY: build-all ## Build release version
+.PHONY: build-all ## Build release all with `tee-dev` feature
 build-all:
-	cargo build --locked --release
+	cargo build --locked --release --features=tee-dev
 
-.PHONY: build-node ## Build release node with default features
+.PHONY: build-node ## Build release node with `tee-dev` feature
 build-node:
-	cargo build --locked -p $(call pkgid, $(NODE_BIN)) --release
+	cargo build --locked -p $(call pkgid, $(NODE_BIN)) --release --features=tee-dev
 
 .PHONY: build-runtime-litentry ## Build litentry release runtime
 build-runtime-litentry:
@@ -59,8 +59,9 @@ srtool-build-wasm-rococo:
 	@./scripts/build-wasm.sh rococo
 
 .PHONY: build-docker-release ## Build docker image using cargo profile `release`
+# with `tee-dev` feature as we use release profile in dev
 build-docker-release:
-	@./scripts/build-docker.sh release
+	@./scripts/build-docker.sh release latest --features=tee-dev
 
 .PHONY: build-docker-production ## Build docker image using cargo profile `production`
 build-docker-production:
@@ -68,7 +69,7 @@ build-docker-production:
 
 .PHONY: build-node-benchmarks ## Build release node with `runtime-benchmarks` feature
 build-node-benchmarks:
-	cargo build --locked --features runtime-benchmarks --release --no-default-features
+	cargo build --locked --features runtime-benchmarks --release
 
 .PHONY: build-node-tryruntime ## Build release node with `try-runtime` feature
 build-node-tryruntime:
@@ -213,6 +214,17 @@ clippyfix:
 .PHONY: cargofix ## cargo fix
 cargofix:
 	cargo fix --allow-dirty --allow-staged --workspace --all-targets --all-features
+
+# shellcheck
+
+.PHONY: shellcheck ## check the shell scripts with WARNING level
+shellcheck:
+	@set -e
+	@echo "checking parachain scripts..."
+	@find scripts -name "*.sh" | xargs shellcheck -S warning
+	@echo "checking tee-worker scripts..."
+	@find tee-worker/scripts/litentry/ -name "*.sh" | xargs shellcheck -S warning
+	@echo "Ok"
 
 define pkgid
 $(shell cargo pkgid $1)

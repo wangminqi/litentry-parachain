@@ -14,7 +14,12 @@
 	limitations under the License.
 
 */
-//! Execute indirect calls, i.e. extrinsics extracted from parentchain blocks
+//! Execute indirect calls, i.e. extrinsics extracted from parentchain blocks.
+//!
+//! The core struct of this crate is the [IndirectCallsExecutor] executor. It scans parentchain
+//! blocks for relevant extrinsics, derives an indirect call for those and dispatches the
+//! indirect call.
+
 #![feature(trait_alias)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(test, feature(assert_matches))]
@@ -51,9 +56,9 @@ use crate::{
 		litentry::{
 			batch_all::BatchAll,
 			create_identity::CreateIdentity,
-			get_scheduled_enclave::{ScheduledEnclaveRemove, ScheduledEnclaveUpdate},
 			remove_identity::RemoveIdentity,
 			request_vc::RequestVC,
+			scheduled_enclave::{RemoveScheduledEnclave, UpdateScheduledEnclave},
 			set_user_shielding_key::SetUserShieldingKey,
 			verify_identity::VerifyIdentity,
 		},
@@ -61,7 +66,7 @@ use crate::{
 		DecorateExecutor,
 	},
 };
-use beefy_merkle_tree::{merkle_root, Keccak256};
+use binary_merkle_tree::merkle_root;
 use codec::Encode;
 use ita_stf::{TrustedCall, TrustedOperation};
 use itp_node_api::metadata::{
@@ -79,7 +84,7 @@ use itp_types::{
 use litentry_primitives::ParentchainBlockNumber;
 use log::*;
 use sp_core::blake2_256;
-use sp_runtime::traits::{Block as ParentchainBlockTrait, Header};
+use sp_runtime::traits::{Block as ParentchainBlockTrait, Header, Keccak256};
 use std::{sync::Arc, vec, vec::Vec};
 
 #[derive(Clone)]
@@ -204,15 +209,17 @@ where
 	pub(crate) fn submit_trusted_call_from_error(
 		&self,
 		shard: ShardIdentifier,
+		account: Option<AccountId>,
 		err: &Error,
+		hash: H256,
 	) -> Result<()> {
 		let enclave_account = self.stf_enclave_signer.get_enclave_account()?;
 		let shielding_key = self.shielding_key_repo.retrieve_key()?;
 		let trusted_call = match err {
 			error::Error::IMPHandlingError(e) =>
-				TrustedCall::handle_imp_error(enclave_account, e.clone()),
+				TrustedCall::handle_imp_error(enclave_account, account, e.clone(), hash),
 			error::Error::VCMPHandlingError(e) =>
-				TrustedCall::handle_vcmp_error(enclave_account, e.clone()),
+				TrustedCall::handle_vcmp_error(enclave_account, account, e.clone(), hash),
 			_ => return Err(Error::Other(("unsupported error").into())),
 		};
 		let signed_trusted_call =
@@ -296,10 +303,10 @@ where
 			let request_vc = RequestVC { block_number: parentchain_block_number };
 			// Found BatchAll extrinsic
 			let batch_all = BatchAll { block_number: parentchain_block_number };
-			// Found Update Scheduled Enclave extrinisc
-			let scheduled_enclave_update =
-				ScheduledEnclaveUpdate { block_number: parentchain_block_number };
-			let scheduled_enclave_remove = ScheduledEnclaveRemove;
+			// Found UpdateScheduledEnclave extrinisc
+			let update_scheduled_enclave = UpdateScheduledEnclave {};
+			// Found RemoveScheduledEnclave extrinisc
+			let remove_scheduled_enclave = RemoveScheduledEnclave {};
 
 			let executors: Vec<&dyn DecorateExecutor<R, S, T, N>> = vec![
 				&shield_funds,
@@ -310,8 +317,8 @@ where
 				&remove_identity,
 				&verify_identity,
 				&request_vc,
-				&scheduled_enclave_update,
-				&scheduled_enclave_remove,
+				&update_scheduled_enclave,
+				&remove_scheduled_enclave,
 			];
 			for executor in executors {
 				match executor.decode_and_execute(self, &mut encoded_xt_opaque.as_slice()) {

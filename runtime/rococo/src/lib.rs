@@ -34,9 +34,10 @@ use frame_support::{
 	weights::{constants::RocksDbWeight, ConstantMultiplier, IdentityFee, Weight},
 	PalletId, RuntimeDebug,
 };
-use frame_system::EnsureSignedBy;
+use frame_system::{EnsureRoot, EnsureSignedBy};
 use hex_literal::hex;
 
+use runtime_common::EnsureEnclaveSigner;
 // for TEE
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_sidechain;
@@ -67,11 +68,12 @@ pub use core_primitives::{opaque, Index, *};
 pub use runtime_common::currency::*;
 use runtime_common::{
 	impl_runtime_transaction_payment_fees, prod_or_fast, BlockHashCount, BlockLength,
-	CouncilInstance, CouncilMembershipInstance, EnsureEnclaveSigner, EnsureRootOrAllCouncil,
+	CouncilInstance, CouncilMembershipInstance, EnsureRootOrAllCouncil,
 	EnsureRootOrAllTechnicalCommittee, EnsureRootOrHalfCouncil, EnsureRootOrHalfTechnicalCommittee,
-	EnsureRootOrTwoThirdsCouncil, EnsureRootOrTwoThirdsTechnicalCommittee, NegativeImbalance,
-	RuntimeBlockWeights, SlowAdjustingFeeUpdate, TechnicalCommitteeInstance,
-	TechnicalCommitteeMembershipInstance, MAXIMUM_BLOCK_WEIGHT,
+	EnsureRootOrTwoThirdsCouncil, EnsureRootOrTwoThirdsTechnicalCommittee,
+	IMPExtrinsicWhitelistInstance, NegativeImbalance, RuntimeBlockWeights, SlowAdjustingFeeUpdate,
+	TechnicalCommitteeInstance, TechnicalCommitteeMembershipInstance,
+	VCMPExtrinsicWhitelistInstance, MAXIMUM_BLOCK_WEIGHT,
 };
 use xcm_config::{XcmConfig, XcmOriginToTransactDispatchOrigin};
 
@@ -146,9 +148,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("rococo-parachain"),
 	impl_name: create_runtime_str!("rococo-parachain"),
 	authoring_version: 1,
-	// same versioning-mechanism as polkadot:
-	// last digit is used for minor updates, like 9110 -> 9111 in polkadot
-	spec_version: 9151,
+	// same versioning-mechanism as polkadot: use last digit for minor updates
+	spec_version: 9160,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -167,7 +168,8 @@ pub fn native_version() -> NativeVersion {
 parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
 
-	pub const SS58Prefix: u16 = 131;
+	// using generic substrate prefix
+	pub const SS58Prefix: u16 = 42;
 }
 
 impl frame_system::Config for Runtime {
@@ -345,8 +347,6 @@ impl pallet_timestamp::Config for Runtime {
 
 impl pallet_authorship::Config for Runtime {
 	type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Aura>;
-	type UncleGenerations = ConstU32<0>;
-	type FilterUncle = ();
 	type EventHandler = (ParachainStaking,);
 }
 
@@ -473,6 +473,7 @@ impl pallet_democracy::Config for Runtime {
 	type MaxProposals = ConstU32<100>;
 	type MaxDeposits = ConstU32<100>;
 	type MaxBlacklisted = ConstU32<100>;
+	type SubmitOrigin = frame_system::EnsureSigned<AccountId>;
 }
 
 parameter_types! {
@@ -489,6 +490,7 @@ impl pallet_collective::Config<CouncilInstance> for Runtime {
 	type MaxMembers = CouncilDefaultMaxMembers;
 	type DefaultVote = pallet_collective::PrimeDefaultVote;
 	type WeightInfo = weights::pallet_collective::WeightInfo<Runtime>;
+	type SetMembersOrigin = EnsureRoot<AccountId>;
 }
 
 impl pallet_membership::Config<CouncilMembershipInstance> for Runtime {
@@ -517,6 +519,7 @@ impl pallet_collective::Config<TechnicalCommitteeInstance> for Runtime {
 	type MaxMembers = CouncilDefaultMaxMembers;
 	type DefaultVote = pallet_collective::PrimeDefaultVote;
 	type WeightInfo = weights::pallet_collective::WeightInfo<Runtime>;
+	type SetMembersOrigin = EnsureRoot<AccountId>;
 }
 
 impl pallet_membership::Config<TechnicalCommitteeMembershipInstance> for Runtime {
@@ -679,6 +682,7 @@ impl cumulus_pallet_xcmp_queue::Config for Runtime {
 	type ControllerOrigin = EnsureRootOrAllCouncil;
 	type ControllerOriginConverter = XcmOriginToTransactDispatchOrigin;
 	type WeightInfo = weights::cumulus_pallet_xcmp_queue::WeightInfo<Runtime>;
+	type PriceForSiblingDelivery = ();
 }
 
 impl cumulus_pallet_dmp_queue::Config for Runtime {
@@ -863,12 +867,19 @@ parameter_types! {
 	pub const MomentsPerDay: Moment = 86_400_000; // [ms/d]
 }
 
+ord_parameter_types! {
+	pub const ALICE: AccountId = sp_runtime::AccountId32::new(hex!["d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"]);
+}
+
 impl pallet_teerex::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type MomentsPerDay = MomentsPerDay;
-	type WeightInfo = weights::pallet_teerex::WeightInfo<Runtime>;
-	type EnclaveAdminOrigin = EnsureRootOrAllCouncil;
+	// TODO: the generated runtime weights file is incomplete
+	//       we are missing `register_dcap_enclave` and `register_quoting_enclave`
+	//       it should be re-benchmarked once the upstream fixes it
+	type WeightInfo = ();
+	type SetAdminOrigin = EnsureRootOrHalfCouncil;
 }
 
 impl pallet_sidechain::Config for Runtime {
@@ -885,13 +896,15 @@ impl pallet_teeracle::Config for Runtime {
 
 impl pallet_identity_management::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = ();
+	type WeightInfo = weights::pallet_identity_management::WeightInfo<Runtime>;
 	type TEECallOrigin = EnsureEnclaveSigner<Runtime>;
 	type DelegateeAdminOrigin = EnsureRootOrAllCouncil;
+	type ExtrinsicWhitelistOrigin = IMPExtrinsicWhitelist;
 }
 
-ord_parameter_types! {
-	pub const ALICE: AccountId = sp_runtime::AccountId32::new(hex!["d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"]);
+impl pallet_group::Config<IMPExtrinsicWhitelistInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type GroupManagerOrigin = EnsureRootOrAllCouncil;
 }
 
 impl pallet_identity_management_mock::Config for Runtime {
@@ -904,8 +917,15 @@ impl pallet_identity_management_mock::Config for Runtime {
 
 impl pallet_vc_management::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = weights::pallet_vc_management::WeightInfo<Runtime>;
 	type TEECallOrigin = EnsureEnclaveSigner<Runtime>;
 	type SetAdminOrigin = EnsureRootOrHalfCouncil;
+	type ExtrinsicWhitelistOrigin = VCMPExtrinsicWhitelist;
+}
+
+impl pallet_group::Config<VCMPExtrinsicWhitelistInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type GroupManagerOrigin = EnsureRootOrAllCouncil;
 }
 
 impl runtime_common::BaseRuntimeRequirements for Runtime {}
@@ -982,6 +1002,8 @@ construct_runtime! {
 		IdentityManagement: pallet_identity_management = 64,
 		AssetManager: pallet_asset_manager = 65,
 		VCManagement: pallet_vc_management = 66,
+		IMPExtrinsicWhitelist: pallet_group::<Instance1> = 67,
+		VCMPExtrinsicWhitelist: pallet_group::<Instance2> = 68,
 
 		// TEE
 		Teerex: pallet_teerex = 90,
@@ -1071,7 +1093,10 @@ impl Contains<RuntimeCall> for NormalModeFilter {
 			RuntimeCall::ParachainStaking(pallet_parachain_staking::Call::candidate_bond_more { .. }) |
 			RuntimeCall::ParachainStaking(pallet_parachain_staking::Call::schedule_candidate_bond_less { .. }) |
 			RuntimeCall::ParachainStaking(pallet_parachain_staking::Call::execute_candidate_bond_less { .. }) |
-			RuntimeCall::ParachainStaking(pallet_parachain_staking::Call::cancel_candidate_bond_less { .. })
+			RuntimeCall::ParachainStaking(pallet_parachain_staking::Call::cancel_candidate_bond_less { .. }) |
+			// Group
+			RuntimeCall::IMPExtrinsicWhitelist(_) |
+			RuntimeCall::VCMPExtrinsicWhitelist(_)
 		)
 	}
 }
@@ -1098,6 +1123,7 @@ mod benches {
 		[pallet_parachain_staking, ParachainStaking]
 		[cumulus_pallet_xcmp_queue, XcmpQueue]
 		[pallet_identity_management, IdentityManagement]
+		[pallet_vc_management, VCManagement]
 		[pallet_teerex, Teerex]
 		[pallet_sidechain, Sidechain]
 		[pallet_teeracle, Teeracle]
@@ -1203,6 +1229,12 @@ impl_runtime_apis! {
 			len: u32,
 		) -> pallet_transaction_payment::FeeDetails<Balance> {
 			TransactionPayment::query_fee_details(uxt, len)
+		}
+		fn query_weight_to_fee(weight: Weight) -> Balance {
+			TransactionPayment::weight_to_fee(weight)
+		}
+		fn query_length_to_fee(length: u32) -> Balance {
+			TransactionPayment::length_to_fee(length)
 		}
 	}
 

@@ -20,12 +20,16 @@ name: General CI
 # jobs that will always be executed:
 # - fmt
 # - set-condition
-# - parachain-build
+# - parachain-build-dev
+# - parachain-build-tee-prod
 # - tee-build
 #
 # [4] please note that job-level if `env` is not supported:
 # https://github.com/actions/runner/issues/1189
 # as a workaround, we need to put it in a step-level or use `needs.outputs`
+#
+# [5] parachain-build-tee-prod builds the parachain image without `tee-dev` feature
+# It's used with tee-worker production deployment with HW mode.
 
 on:
   push:
@@ -77,7 +81,7 @@ concurrency:
 
 jobs:
   set-condition:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     # see https://github.com/orgs/community/discussions/25722
     if: ${{ github.event_name == 'push' || !github.event.pull_request.draft }}
     outputs:
@@ -131,7 +135,7 @@ jobs:
           echo "run_tee_test=$run_tee_test" | tee -a $GITHUB_OUTPUT
 
   fmt:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
 
@@ -170,7 +174,7 @@ jobs:
   # sequentialise the workflow runs on `dev` branch
   # the if condition is applied in step level to make this job always `successful`
   sequentialise:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Wait for previous run
         if: ${{ !failure() && (github.event_name == 'push') && (github.ref == 'refs/heads/dev') }}
@@ -181,7 +185,7 @@ jobs:
           branch: dev
 
   parachain-clippy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - fmt
       - set-condition
@@ -206,13 +210,13 @@ jobs:
         uses: andymckay/cancel-action@0.3
 
   tee-clippy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - fmt
       - set-condition
       - sequentialise
     if: needs.set-condition.outputs.rebuild_tee == 'true'
-    container: "integritee/integritee-dev:0.1.12"
+    container: "integritee/integritee-dev:0.1.13"
     steps:
       - uses: actions/checkout@v3
 
@@ -240,8 +244,8 @@ jobs:
         if: failure()
         uses: andymckay/cancel-action@0.3
 
-  parachain-build:
-    runs-on: ubuntu-latest
+  parachain-build-dev:
+    runs-on: ubuntu-22.04
     needs:
       - fmt
       - set-condition
@@ -263,13 +267,53 @@ jobs:
 
       - name: Save docker image
         run: |
-          docker save litentry/litentry-parachain -o litentry-parachain.tar
+          docker save litentry/litentry-parachain -o litentry-parachain-dev.tar
 
       - name: Upload docker image
         uses: actions/upload-artifact@v3
         with:
-          name: parachain-artifact
-          path: litentry-parachain.tar
+          name: parachain-artifact-dev
+          path: litentry-parachain-dev.tar
+          if-no-files-found: error
+
+      - name: Fail early
+        if: failure()
+        uses: andymckay/cancel-action@0.3
+
+  parachain-build-tee-prod:
+    runs-on: ubuntu-22.04
+    needs:
+      - fmt
+      - set-condition
+      - sequentialise
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build docker image
+        if: |
+          needs.set-condition.outputs.rebuild_parachain == 'true' &&
+          needs.set-condition.outputs.push_docker == 'true'
+        run: |
+          ./scripts/build-docker.sh production tee-prod
+          echo "============================="
+          docker images
+
+      - name: Pull docker image optionally
+        if: |
+          needs.set-condition.outputs.rebuild_parachain == 'false' ||
+          needs.set-condition.outputs.push_docker == 'false'
+        run: |
+          docker pull litentry/litentry-parachain:tee-prod
+
+      - name: Save docker image
+        run: |
+          docker save litentry/litentry-parachain:tee-prod -o litentry-parachain-tee-prod.tar
+
+      - name: Upload docker image
+        uses: actions/upload-artifact@v3
+        with:
+          name: parachain-artifact-tee-prod
+          path: litentry-parachain-tee-prod.tar
           if-no-files-found: error
 
       - name: Fail early
@@ -277,7 +321,7 @@ jobs:
         uses: andymckay/cancel-action@0.3
 
   tee-build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs:
       - fmt
       - set-condition
@@ -319,11 +363,17 @@ jobs:
 
       - run: docker images --all
 
+      - name: Pallet unittests
+        if: needs.set-condition.outputs.rebuild_tee == 'true'
+        working-directory: ./tee-worker
+        run: |
+          rustup show
+          cargo test --locked --release -p pallet-* --lib
+
       - name: Test enclave
         # cargo test is not supported in the enclave
         # see https://github.com/apache/incubator-teaclave-sgx-sdk/issues/232
         run: docker run litentry/integritee-worker test --all
-        continue-on-error: true
 
       - name: Save docker images
         run: docker save litentry/integritee-worker litentry/integritee-cli -o litentry-tee.tar
@@ -340,10 +390,10 @@ jobs:
         uses: andymckay/cancel-action@0.3
 
   parachain-ts-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - set-condition
-      - parachain-build
+      - parachain-build-dev
     strategy:
       matrix:
         chain:
@@ -355,11 +405,11 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          name: parachain-artifact
+          name: parachain-artifact-dev
 
       - name: Load docker image
         run: |
-          docker load -i litentry-parachain.tar
+          docker load -i litentry-parachain-dev.tar
 
       - name: Run ts tests for ${{ matrix.chain }}
         if: needs.set-condition.outputs.run_parachain_test == 'true'
@@ -381,7 +431,7 @@ jobs:
         uses: andymckay/cancel-action@0.3
 
   parachain-unit-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - fmt
       - set-condition
@@ -408,7 +458,7 @@ jobs:
         uses: andymckay/cancel-action@0.3
 
   parachain-runtime-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - fmt
       - set-condition
@@ -444,16 +494,16 @@ jobs:
         uses: andymckay/cancel-action@0.3
 
   tee-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - set-condition
-      - parachain-build
+      - parachain-build-dev
       - tee-build
     env:
       WORKER_IMAGE_TAG: integritee-worker:dev
       CLIENT_IMAGE_TAG: integritee-cli:dev
       COINMARKETCAP_KEY: ${{ secrets.COINMARKETCAP_KEY }}
-      TEERACLE_INTERVAL_SECONDS: 4
+      TEERACLE_INTERVAL_SECONDS: 10
 
     strategy:
       fail-fast: false
@@ -470,6 +520,7 @@ jobs:
           - test_name: lit-identity-test
           - test_name: lit-parentchain-nonce
           - test_name: lit-batch-test
+          - test_name: lit-id-graph-stats
 
     steps:
       - uses: actions/checkout@v3
@@ -480,7 +531,7 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          name: parachain-artifact
+          name: parachain-artifact-dev
 
       - uses: actions/download-artifact@v3
         with:
@@ -488,7 +539,7 @@ jobs:
 
       - name: Load docker image
         run: |
-          docker load -i litentry-parachain.tar
+          docker load -i litentry-parachain-dev.tar
           docker load -i litentry-tee.tar
 
       - name: Re-name Image Tags
@@ -508,7 +559,7 @@ jobs:
 
       - name: Integration Test ${{ matrix.test_name }}
         if: needs.set-condition.outputs.run_tee_test == 'true'
-        timeout-minutes: 30
+        timeout-minutes: 40
         run: |
           cd tee-worker/docker
           docker compose -f docker-compose.yml -f ${{ matrix.test_name }}.yml up --no-build --exit-code-from ${{ matrix.test_name }} ${{ matrix.test_name }}
@@ -550,16 +601,21 @@ jobs:
   #
   # `!failure()` needs to be used to cover skipped jobs
   push-docker:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - set-condition
       - parachain-ts-test
+      - parachain-build-tee-prod
       - tee-test
     if: ${{ !failure() && needs.set-condition.outputs.push_docker == 'true' }}
     steps:
       - uses: actions/download-artifact@v3
         with:
-          name: parachain-artifact
+          name: parachain-artifact-dev
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: parachain-artifact-tee-prod
 
       - uses: actions/download-artifact@v3
         with:
@@ -567,7 +623,8 @@ jobs:
 
       - name: Load docker image
         run: |
-          docker load -i litentry-parachain.tar
+          docker load -i litentry-parachain-dev.tar
+          docker load -i litentry-parachain-tee-prod.tar
           docker load -i litentry-tee.tar
 
       - name: Dockerhub login
@@ -576,13 +633,19 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      # only push the docker image if we rebuilt it
+      # only push `litentry/litentry-parachain` if we rebuilt it
       - name: Push parachain image
         if: needs.set-condition.outputs.rebuild_parachain == 'true'
         run: |
           docker push litentry/litentry-parachain
 
-      # only push the docker image if we rebuilt it
+      # only push `litentry/litentry-parachain:tee-prod` if we rebuilt it
+      - name: Push parachain image
+        if: needs.set-condition.outputs.rebuild_parachain == 'true'
+        run: |
+          docker push litentry/litentry-parachain:tee-prod
+
+      # only push TEE images if we rebuilt them
       - name: Push tee-worker image
         if: needs.set-condition.outputs.rebuild_tee == 'true'
         run: |

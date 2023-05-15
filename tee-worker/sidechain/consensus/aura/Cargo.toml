@@ -13,9 +13,9 @@ log = { version = "0.4", default-features = false }
 sgx_tstd = { branch = "master", git = "https://github.com/apache/teaclave-sgx-sdk.git", optional = true }
 
 # substrate deps
-frame-support = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.37" }
-sp-core = { default-features = false, features = ["full_crypto"], git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.37" }
-sp-runtime = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.37" }
+frame-support = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.39" }
+sp-core = { default-features = false, features = ["full_crypto"], git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.39" }
+sp-runtime = { default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.39" }
 
 # local deps
 ita-stf = { path = "../../../app-libs/stf", default-features = false }
@@ -38,6 +38,7 @@ its-consensus-slots = { path = "../slots", default-features = false }
 its-primitives = { path = "../../primitives", default-features = false }
 its-state = { path = "../../state", default-features = false }
 its-validateer-fetch = { path = "../../validateer-fetch", default-features = false }
+lc-scheduled-enclave = { path = "../../../litentry/core/scheduled-enclave", default-features = false }
 
 [dev-dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
@@ -47,7 +48,7 @@ itc-parentchain-test = { path = "../../../core/parentchain/test" }
 itp-storage = { path = "../../../core-primitives/storage" }
 itp-test = { path = "../../../core-primitives/test" }
 its-test = { path = "../../../sidechain/test" }
-sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.37" }
+sp-keyring = { git = "https://github.com/paritytech/substrate.git", branch = "polkadot-v0.9.39" }
 
 [features]
 default = ["std"]
@@ -67,6 +68,7 @@ sgx = [
     "its-consensus-slots/sgx",
     "its-state/sgx",
     "its-block-verification/sgx",
+    "lc-scheduled-enclave/sgx",
 ]
 std = [
     #crates.io
@@ -96,4 +98,5 @@ std = [
     "its-state/std",
     "its-validateer-fetch/std",
     "its-primitives/std",
+    "lc-scheduled-enclave/std",
 ]

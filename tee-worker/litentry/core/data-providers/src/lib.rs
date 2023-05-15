@@ -50,7 +50,9 @@ use std::sync::RwLock;
 #[cfg(feature = "sgx")]
 use std::sync::SgxRwLock as RwLock;
 
+use litentry_primitives::{ErrorDetail, ErrorString, IntoErrorDetail};
 use std::{
+	format,
 	string::{String, ToString},
 	vec::Vec,
 };
@@ -72,12 +74,14 @@ const TIMEOUT: Duration = Duration::from_secs(3u64);
 pub struct DataProvidersStatic {
 	pub twitter_official_url: String,
 	pub twitter_litentry_url: String,
-	pub twitter_auth_token: String,
+	pub twitter_auth_token_v2: String,
+	pub twitter_auth_token_v1_1: String,
 	pub discord_official_url: String,
 	pub discord_litentry_url: String,
 	pub discord_auth_token: String,
 	pub graphql_url: String,
 	pub graphql_auth_key: String,
+	pub credential_endpoint: String,
 }
 impl Default for DataProvidersStatic {
 	fn default() -> Self {
@@ -89,12 +93,14 @@ impl DataProvidersStatic {
 		DataProvidersStatic {
 			twitter_official_url: "https://api.twitter.com".to_string(),
 			twitter_litentry_url: "".to_string(),
-			twitter_auth_token: "Bearer ".to_string(),
+			twitter_auth_token_v2: "Bearer ".to_string(),
+			twitter_auth_token_v1_1: "Bearer ".to_string(),
 			discord_official_url: "https://discordapp.com".to_string(),
 			discord_litentry_url: "".to_string(),
 			discord_auth_token: "".to_string(),
 			graphql_url: "https://graph.tdf-labs.io/".to_string(),
 			graphql_auth_key: "".to_string(),
+			credential_endpoint: "".to_string(),
 		}
 	}
 	pub fn set_twitter_official_url(&mut self, v: String) {
@@ -105,9 +111,13 @@ impl DataProvidersStatic {
 		debug!("set_twitter_litentry_url: {:?}", v);
 		self.twitter_litentry_url = v;
 	}
-	pub fn set_twitter_auth_token(&mut self, v: String) {
-		debug!("set_twitter_auth_token: {:?}", v);
-		self.twitter_auth_token = v;
+	pub fn set_twitter_auth_token_v2(&mut self, v: String) {
+		debug!("set_twitter_auth_token_v2: {:?}", v);
+		self.twitter_auth_token_v2 = v;
+	}
+	pub fn set_twitter_auth_token_v1_1(&mut self, v: String) {
+		debug!("set_twitter_auth_token_v1_1: {:?}", v);
+		self.twitter_auth_token_v1_1 = v;
 	}
 	pub fn set_discord_official_url(&mut self, v: String) {
 		debug!("set_discord_official_url: {:?}", v);
@@ -129,6 +139,10 @@ impl DataProvidersStatic {
 		debug!("set_graphql_auth_key: {:?}", v);
 		self.graphql_auth_key = v;
 	}
+	pub fn set_credential_endpoint(&mut self, v: String) {
+		debug!("set_credential_endpoint: {:?}", v);
+		self.credential_endpoint = v;
+	}
 }
 
 lazy_static! {
@@ -146,6 +160,14 @@ pub enum Error {
 
 	#[error("GraphQL error: {0}")]
 	GraphQLError(String),
+}
+
+impl IntoErrorDetail for Error {
+	fn into_error_detail(self) -> ErrorDetail {
+		ErrorDetail::DataProviderError(ErrorString::truncate_from(
+			format!("{self:?}").as_bytes().to_vec(),
+		))
+	}
 }
 
 pub trait UserInfo {

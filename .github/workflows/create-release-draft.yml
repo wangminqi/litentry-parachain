@@ -76,7 +76,7 @@ jobs:
 
       - name: Build with srtool
         id: srtool_build
-        uses: chevdor/srtool-actions@v0.5.0
+        uses: chevdor/srtool-actions@v0.6.0
         env:
           # optional: will override the parachain pallet ID and authorize_upgrade call ID,
           #           which will result in a different parachain_authorize_upgrade_hash
@@ -104,7 +104,7 @@ jobs:
   ## build docker image of client binary ##
   build-docker:
     if: ${{ github.event.inputs.release_client == 'true' }}
-    runs-on: self-hosted
+    runs-on: dev-builder
     steps:
       - name: Checkout codes on ${{ env.RELEASE_TAG }}
         uses: actions/checkout@v3

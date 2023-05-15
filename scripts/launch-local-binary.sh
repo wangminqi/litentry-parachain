@@ -9,6 +9,8 @@
 #
 # To use this script locally, you might have to first compile the binaries that can run on your OS.
 
+set -eo pipefail
+
 function usage() {
   echo
   echo "Usage:   $0 litentry|litmus|rococo [path-to-polkadot-bin] [path-to-litentry-collator]"
@@ -43,7 +45,7 @@ if [ -z "$POLKADOT_BIN" ]; then
   # https://api.github.com/repos/paritytech/polkadot/releases/latest is not reliable as
   # polkadot could publish release which has no binary
   #
-  url="https://github.com/paritytech/polkadot/releases/download/v0.9.37/polkadot"
+  url="https://github.com/paritytech/polkadot/releases/download/v0.9.39/polkadot"
   POLKADOT_BIN="$TMPDIR/polkadot"
   wget -O "$POLKADOT_BIN" -q "$url"
   chmod a+x "$POLKADOT_BIN"

@@ -30,18 +30,17 @@ pub mod sgx_reexport_prelude {
 	pub use url_sgx as url;
 }
 
-use itp_types::AccountId;
+use itp_types::{AccountId, H256};
 pub mod error;
 pub mod stf_task_sender;
 use codec::{Decode, Encode};
 pub use error::Result;
 use itp_stf_primitives::types::ShardIdentifier;
 use litentry_primitives::{
-	Assertion, ChallengeCode, Identity, UserShieldingKeyType, Web2ValidationData,
-	Web3ValidationData,
+	Assertion, ChallengeCode, Identity, ParentchainBlockNumber, UserShieldingKeyType,
+	ValidationData,
 };
 use sp_runtime::{traits::ConstU32, BoundedVec};
-use sp_std::vec::Vec;
 
 /// Here a few Request structs are defined for asynchronously stf-tasks handling.
 /// A `callback` exists for some request types to submit a callback TrustedCall to top pool.
@@ -68,26 +67,14 @@ use sp_std::vec::Vec;
 /// https://www.notion.so/web3builders/Sidechain-block-importer-and-block-production-28292233b4c74f4ab8110a0014f8d9df
 
 #[derive(Encode, Decode, Clone, Debug, PartialEq, Eq)]
-pub struct Web2IdentityVerificationRequest {
-	pub encoded_shard: Vec<u8>,
+pub struct IdentityVerificationRequest {
+	pub shard: ShardIdentifier,
 	pub who: AccountId,
 	pub identity: Identity,
 	pub challenge_code: ChallengeCode,
-	pub validation_data: Web2ValidationData,
-	pub bn: litentry_primitives::ParentchainBlockNumber, //Parentchain BlockNumber
-	pub encoded_callback: Vec<u8>,
-}
-
-/// TODO: adapt Web3 struct fields later
-#[derive(Encode, Decode, Clone, Debug, PartialEq, Eq)]
-pub struct Web3IdentityVerificationRequest {
-	pub encoded_shard: Vec<u8>,
-	pub who: AccountId,
-	pub identity: Identity,
-	pub challenge_code: ChallengeCode,
-	pub validation_data: Web3ValidationData,
-	pub bn: litentry_primitives::ParentchainBlockNumber, //Parentchain BlockNumber
-	pub encoded_callback: Vec<u8>,
+	pub validation_data: ValidationData,
+	pub bn: ParentchainBlockNumber,
+	pub hash: H256,
 }
 
 pub type MaxIdentityLength = ConstU32<64>;
@@ -98,37 +85,31 @@ pub struct AssertionBuildRequest {
 	pub who: AccountId,
 	pub assertion: Assertion,
 	pub vec_identity: BoundedVec<Identity, MaxIdentityLength>,
-	pub bn: litentry_primitives::ParentchainBlockNumber,
+	pub bn: ParentchainBlockNumber,
 	pub key: UserShieldingKeyType,
+	pub hash: H256,
 }
 
 #[derive(Encode, Decode, Clone, Debug, PartialEq, Eq)]
 pub struct SetUserShieldingKeyRequest {
-	pub encoded_shard: Vec<u8>,
+	pub shard: ShardIdentifier,
 	pub who: AccountId,
-	pub encoded_callback: Vec<u8>,
+	pub key: UserShieldingKeyType,
+	pub hash: H256,
 }
 
 #[derive(Encode, Decode, Clone, Debug, PartialEq, Eq)]
 pub enum RequestType {
-	Web2IdentityVerification(Web2IdentityVerificationRequest),
-	Web3IdentityVerification(Web3IdentityVerificationRequest),
+	IdentityVerification(IdentityVerificationRequest),
 	AssertionVerification(AssertionBuildRequest),
-	// set the user shielding key async - just to showcase how to
-	// async process the request in stf-task-receiver
-	// In real scenario it should be done synchronously
+	// set the user shielding key async for demo purpose
+	// in reality the user's shielding key is set synchronously
 	SetUserShieldingKey(SetUserShieldingKeyRequest),
 }
 
-impl From<Web2IdentityVerificationRequest> for RequestType {
-	fn from(r: Web2IdentityVerificationRequest) -> Self {
-		RequestType::Web2IdentityVerification(r)
-	}
-}
-
-impl From<Web3IdentityVerificationRequest> for RequestType {
-	fn from(r: Web3IdentityVerificationRequest) -> Self {
-		RequestType::Web3IdentityVerification(r)
+impl From<IdentityVerificationRequest> for RequestType {
+	fn from(r: IdentityVerificationRequest) -> Self {
+		RequestType::IdentityVerification(r)
 	}
 }
 

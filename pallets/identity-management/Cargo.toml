@@ -11,30 +11,34 @@ version = '0.1.0'
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len"] }
 log = { version = "0.4", default-features = false }
 pallet-teerex = { path = "../teerex", default-features = false }
-scale-info = { version = "2.3.1", default-features = false, features = ["derive"] }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 
 # primitives
-sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.37", default-features = false }
-sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.37", default-features = false }
-sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.37", default-features = false }
-sp-std = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.37", default-features = false }
+sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.39", default-features = false }
+sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.39", default-features = false }
+sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.39", default-features = false }
+sp-std = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.39", default-features = false }
 
 # frame dependencies
-frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.37", default-features = false }
-frame-system = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.37", default-features = false }
+frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.39", default-features = false }
+frame-system = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.39", default-features = false }
 
 # benchmarking
-frame-benchmarking = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.37", default-features = false, optional = true }
+frame-benchmarking = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.39", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false }
+test-utils = { path = "../test-utils", default-features = false, optional = true }
 
 # local
 core-primitives = { path = "../../primitives/core", default-features = false }
+teerex-primitives = { path = "../../primitives/teerex", default-features = false }
 
 [dev-dependencies]
-pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.37" }
+pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.39" }
+pallet-group = { path = "../../pallets/group" }
 pallet-teerex = { path = "../teerex", features = ["skip-scheduled-enclave-check"] }
-pallet-timestamp = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.37" }
-sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.37" }
+pallet-timestamp = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.39" }
+sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.39" }
+test-utils = { path = "../test-utils" }
 
 [features]
 default = ["std"]
@@ -42,6 +46,8 @@ runtime-benchmarks = [
   "frame-benchmarking/runtime-benchmarks",
   "frame-support/runtime-benchmarks",
   "frame-system/runtime-benchmarks",
+  "pallet-timestamp/runtime-benchmarks",
+  "test-utils",
 ]
 skip-ias-check = [
   "pallet-teerex/skip-ias-check",
@@ -57,6 +63,7 @@ std = [
   "frame-system/std",
   "frame-benchmarking?/std",
   "core-primitives/std",
+  "teerex-primitives/std",
   "pallet-teerex/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

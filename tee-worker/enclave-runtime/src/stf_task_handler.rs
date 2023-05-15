@@ -31,10 +31,6 @@ use crate::{
 		GLOBAL_SHIELDING_KEY_REPOSITORY_COMPONENT, GLOBAL_STATE_OBSERVER_COMPONENT,
 		GLOBAL_TOP_POOL_AUTHOR_COMPONENT,
 	},
-	utils::{
-		get_extrinsic_factory_from_solo_or_parachain,
-		get_node_metadata_repository_from_solo_or_parachain,
-	},
 	GLOBAL_STATE_HANDLER_COMPONENT,
 };
 
@@ -52,12 +48,14 @@ pub unsafe extern "C" fn run_stf_task_handler(
 	let mut mut_handle = G_DATA_PROVIDERS.write().unwrap();
 	mut_handle.set_twitter_official_url(data_providers_static.twitter_official_url);
 	mut_handle.set_twitter_litentry_url(data_providers_static.twitter_litentry_url);
-	mut_handle.set_twitter_auth_token(data_providers_static.twitter_auth_token);
+	mut_handle.set_twitter_auth_token_v1_1(data_providers_static.twitter_auth_token_v1_1);
+	mut_handle.set_twitter_auth_token_v2(data_providers_static.twitter_auth_token_v2);
 	mut_handle.set_discord_official_url(data_providers_static.discord_official_url);
 	mut_handle.set_discord_litentry_url(data_providers_static.discord_litentry_url);
 	mut_handle.set_discord_auth_token(data_providers_static.discord_auth_token);
 	mut_handle.set_graphql_url(data_providers_static.graphql_url);
 	mut_handle.set_graphql_auth_key(data_providers_static.graphql_auth_key);
+	mut_handle.set_credential_endpoint(data_providers_static.credential_endpoint);
 
 	if let Err(e) = run_stf_task_handler_internal() {
 		error!("Error while running stf task handler thread: {:?}", e);
@@ -80,26 +78,15 @@ fn run_stf_task_handler_internal() -> Result<()> {
 	let shielding_key = Rsa3072Seal::unseal_from_static_file().unwrap();
 
 	let ocall_api = GLOBAL_OCALL_API_COMPONENT.get()?;
-
-	let node_metadata = get_node_metadata_repository_from_solo_or_parachain()?;
-	let extrinsic_factory = get_extrinsic_factory_from_solo_or_parachain()?;
-
 	let stf_enclave_signer = Arc::new(EnclaveStfEnclaveSigner::new(
 		state_observer,
-		ocall_api.clone(),
+		ocall_api,
 		shielding_key_repository,
 		author_api.clone(),
 	));
 
-	let stf_task_context = StfTaskContext::new(
-		shielding_key,
-		ocall_api,
-		extrinsic_factory,
-		node_metadata,
-		author_api,
-		stf_enclave_signer,
-		state_handler,
-	);
+	let stf_task_context =
+		StfTaskContext::new(shielding_key, author_api, stf_enclave_signer, state_handler);
 
 	run_stf_task_receiver(Arc::new(stf_task_context)).map_err(Error::StfTaskReceiver)
 }

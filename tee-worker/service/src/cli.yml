@@ -90,12 +90,20 @@ args:
         default_value: "dev"
     - enable-mock-server:
         long: enable-mock-server
-        help: Set this flag to enable starting the mock server.
+        takes_value: false
+        help: Set this flag to enable the HTTP mock server for testing
     - mock-server-port:
         long: mock-server-port
-        help: Set the port for the mock-server HTTP server
+        help: Set the port for HTTP mock server
+        takes_value: true
         required: false
-        default_value: "9527"
+        default_value: "19527"
+    - parentchain-start-block:
+        long: parentchain-start-block
+        help: Set the parentchain block number to start syncing with
+        takes_value: true
+        required: false
+        default_value: "0"
 
 subcommands:
     - run:
@@ -103,7 +111,6 @@ subcommands:
         args:
             - skip-ra:
                 long: skip-ra
-                short: s
                 help: skip remote attestation. Set this flag if running enclave in SW mode
             - shard:
                 required: false
@@ -128,12 +135,10 @@ subcommands:
         args:
             - shard:
                 long: shard
-                short: s
                 required: false
                 help: shard identifier base58 encoded. Defines the state that this worker shall operate on. Default is mrenclave
             - skip-ra:
                   long: skip-ra
-                  short: s
                   help: skip remote attestation. Set this flag if running enclave in SW mode
     - shielding-key:
         about: Get the public RSA3072 key from the TEE to be used to encrypt requests
@@ -156,11 +161,11 @@ subcommands:
         args:
             - old-shard:
                 long: old-shard    
-                help: shard identifier base58 encoded      
+                help: shard identifier hex encoded
                 takes_value: true
             - new-shard:
                 long: new-shard
-                help: shard identifier base58 encoded
+                help: shard identifier hex encoded
                 takes_value: true
     - test:
           about: Run tests involving the enclave

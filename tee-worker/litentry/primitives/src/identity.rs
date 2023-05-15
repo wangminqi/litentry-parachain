@@ -72,7 +72,9 @@ pub enum SubstrateNetwork {
 	Kusama,
 	Litentry,
 	Litmus,
+	LitentryRococo,
 	Khala,
+	TestNet, // when we launch it with standalone (integritee-)node
 }
 
 impl SubstrateNetwork {
@@ -83,7 +85,21 @@ impl SubstrateNetwork {
 			Self::Kusama => 2,
 			Self::Litentry => 31,
 			Self::Litmus => 131,
+			Self::LitentryRococo => 42,
 			Self::Khala => 30,
+			Self::TestNet => 13,
+		}
+	}
+
+	pub fn from_ss58_prefix(prefix: u16) -> Self {
+		match prefix {
+			0 => Self::Polkadot,
+			2 => Self::Kusama,
+			31 => Self::Litentry,
+			131 => Self::Litmus,
+			42 => Self::LitentryRococo,
+			30 => Self::Khala,
+			_ => Self::TestNet,
 		}
 	}
 }

@@ -14,40 +14,83 @@
 // You should have received a copy of the GNU General Public License
 // along with Litentry.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::Assertion;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::{traits::ConstU32, BoundedVec};
+use sp_runtime::{
+	traits::{ConstU32, Printable},
+	BoundedVec, DispatchError, DispatchErrorWithPostInfo,
+};
 
 pub type MaxStringLength = ConstU32<100>;
 pub type ErrorString = BoundedVec<u8, MaxStringLength>;
 
-// Identity Management Pallet Error
+// enum to reflect the error detail from TEE-worker processing
 #[derive(Encode, Decode, Clone, Debug, PartialEq, Eq, TypeInfo, MaxEncodedLen)]
-pub enum IMPError {
-	// UTF8Error,
-	DecodeHexFailed(ErrorString),
-	HttpRequestFailed(ErrorString),
-	// tee stf error
+pub enum ErrorDetail {
+	// error when importing the parentchain blocks and executing indirect calls
+	ImportError,
+	// generic error when executing STF, the `ErrorString` should indicate the actual reason
 	StfError(ErrorString),
-	// schedued encalve import error
-	ImportScheduledEnclaveFailed,
-	// Indirect call handling errors when importing parachain blocks
-	CreateIdentityHandlingFailed,
-	RemoveIdentityHandlingFailed,
-	VerifyIdentityHandlingFailed,
-	SetUserShieldingKeyHandlingFailed,
-
-	// identity verification errors
-	InvalidUserShieldingKey,
+	// error when sending stf request to the receiver
+	SendStfRequestFailed,
+	// error when challenge code not found
+	ChallengeCodeNotFound,
+	// error when user shielding key not found
+	UserShieldingKeyNotFound,
+	// generic parse error, can be caused by UTF8/JSON serde..
+	ParseError,
+	// errors when communicating with data provider, e.g. HTTP error
+	DataProviderError(ErrorString),
 	InvalidIdentity,
 	WrongWeb2Handle,
 	UnexpectedMessage,
-	WrongIdentityHandleType,
 	WrongSignatureType,
 	VerifySubstrateSignatureFailed,
-	RecoverSubstratePubkeyFailed,
 	VerifyEvmSignatureFailed,
 	RecoverEvmAddressFailed,
+}
+
+// We could have used Into<ErrorDetail>, but we want it to be more explicit, similar to `into_iter`
+pub trait IntoErrorDetail {
+	fn into_error_detail(self) -> ErrorDetail;
+}
+
+// `From` is implemented for `DispatchError` and `DispatchErrorWithPostInfo` on the top level,
+// because we know it can only happen during stf execution in enclave
+impl From<DispatchError> for ErrorDetail {
+	fn from(e: DispatchError) -> Self {
+		ErrorDetail::StfError(ErrorString::truncate_from(
+			<DispatchError as Into<&'static str>>::into(e).into(),
+		))
+	}
+}
+
+impl<T> From<DispatchErrorWithPostInfo<T>> for ErrorDetail
+where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + Printable,
+{
+	fn from(e: DispatchErrorWithPostInfo<T>) -> Self {
+		ErrorDetail::StfError(ErrorString::truncate_from(
+			<DispatchErrorWithPostInfo<T> as Into<&'static str>>::into(e).into(),
+		))
+	}
+}
+
+// Identity Management Pallet Error
+#[derive(Encode, Decode, Clone, Debug, PartialEq, Eq, TypeInfo, MaxEncodedLen)]
+pub enum IMPError {
+	// errors when executing individual error
+	SetUserShieldingKeyFailed(ErrorDetail),
+	CreateIdentityFailed(ErrorDetail),
+	RemoveIdentityFailed(ErrorDetail),
+	VerifyIdentityFailed(ErrorDetail),
+	// scheduled encalve import error
+	ImportScheduledEnclaveFailed,
+
+	// should be unreached, but just to be on the safe side
+	// we should classify the error if we ever get this
+	UnclassifiedError(ErrorDetail),
 }
 
 impl frame_support::traits::PalletError for IMPError {
@@ -58,24 +101,10 @@ impl frame_support::traits::PalletError for IMPError {
 // Verified Credential(VC) Management Pallet Error
 #[derive(Encode, Decode, Clone, Debug, PartialEq, Eq, TypeInfo, MaxEncodedLen)]
 pub enum VCMPError {
-	HttpRequestFailed(ErrorString),
-	// Indirect call handling errors when importing parachain blocks
-	RequestVCHandlingFailed,
-	// tee stf error
-	StfError(ErrorString),
-	// UTF8Error
-	ParseError,
-	// Assertion
-	Assertion1Failed,
-	Assertion2Failed,
-	Assertion3Failed,
-	Assertion4Failed,
-	Assertion5Failed,
-	Assertion6Failed,
-	Assertion7Failed,
-	Assertion8Failed,
-	Assertion10Failed,
-	Assertion11Failed,
+	RequestVCFailed(Assertion, ErrorDetail),
+	// should be unreached, but just to be on the safe side
+	// we should classify the error if we ever get this
+	UnclassifiedError(ErrorDetail),
 }
 
 pub enum ETHSenderError {

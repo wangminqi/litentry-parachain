@@ -20,18 +20,19 @@ compile_error!("feature \"std\" and feature \"sgx\" cannot be enabled at the sam
 #[cfg(all(not(feature = "std"), feature = "sgx"))]
 extern crate sgx_tstd as std;
 
-use crate::Result;
+use crate::*;
 use itp_stf_primitives::types::ShardIdentifier;
 use itp_types::AccountId;
 use itp_utils::stringify::account_id_to_string;
 use lc_credentials::Credential;
 use lc_stf_task_sender::MaxIdentityLength;
-use litentry_primitives::{Identity, ParentchainBlockNumber, VCMPError};
 use log::*;
 use sp_runtime::BoundedVec;
 
-const VC_SUBJECT_DESCRIPTION: &str = "Identity Linked And Verified";
-const VC_SUBJECT_TYPE: &str = "IdentityLinkedVerified";
+const VC_A1_SUBJECT_DESCRIPTION: &str =
+	"The user has verified one identity in Web 2 and one identity in Web 3";
+const VC_A1_SUBJECT_TYPE: &str = "Basic Identity Verification";
+const VC_A1_SUBJECT_TAG: [&str; 1] = ["Litentry Network"];
 
 pub fn build(
 	identities: BoundedVec<Identity, MaxIdentityLength>,
@@ -55,7 +56,11 @@ pub fn build(
 	match Credential::new_default(who, &shard.clone(), bn) {
 		Ok(mut credential_unsigned) => {
 			// add subject info
-			credential_unsigned.add_subject_info(VC_SUBJECT_DESCRIPTION, VC_SUBJECT_TYPE);
+			credential_unsigned.add_subject_info(
+				VC_A1_SUBJECT_DESCRIPTION,
+				VC_A1_SUBJECT_TYPE,
+				VC_A1_SUBJECT_TAG.to_vec(),
+			);
 
 			// add assertion
 			let flag = web2_cnt != 0 && web3_cnt != 0;
@@ -65,7 +70,7 @@ pub fn build(
 		},
 		Err(e) => {
 			error!("Generate unsigned credential failed {:?}", e);
-			Err(VCMPError::Assertion1Failed)
+			Err(Error::RequestVCFailed(Assertion::A1, e.into_error_detail()))
 		},
 	}
 }

@@ -14,64 +14,53 @@
 // You should have received a copy of the GNU General Public License
 // along with Litentry.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{handler::TaskHandler, StfTaskContext};
+use crate::{handler::TaskHandler, StfTaskContext, TrustedCall};
 use ita_sgx_runtime::Hash;
-use itp_extrinsics_factory::CreateExtrinsics;
-use itp_node_api::metadata::{
-	pallet_imp::IMPCallIndexes, pallet_vcmp::VCMPCallIndexes, provider::AccessNodeMetadata,
-};
-use itp_ocall_api::EnclaveOnChainOCallApi;
 use itp_sgx_crypto::{ShieldingCryptoDecrypt, ShieldingCryptoEncrypt};
 use itp_sgx_externalities::SgxExternalitiesTrait;
 use itp_stf_executor::traits::StfEnclaveSigning;
 use itp_stf_state_handler::handle_state::HandleState;
 use itp_top_pool_author::traits::AuthorApi;
-use itp_types::{AccountId, OpaqueCall};
 use itp_utils::stringify::account_id_to_string;
-use lc_credentials::Credential;
+use lc_data_providers::G_DATA_PROVIDERS;
 use lc_stf_task_sender::AssertionBuildRequest;
-use litentry_primitives::{aes_encrypt_default, Assertion, UserShieldingKeyType, VCMPError};
+use litentry_primitives::{
+	aes_encrypt_default, AesOutput, Assertion, ErrorDetail, ErrorString, VCMPError,
+};
 use log::*;
 use sp_core::hashing::blake2_256;
-use std::sync::Arc;
+use std::{format, sync::Arc};
 
 pub(crate) struct AssertionHandler<
 	K: ShieldingCryptoDecrypt + ShieldingCryptoEncrypt + Clone,
-	O: EnclaveOnChainOCallApi,
-	C: CreateExtrinsics,
-	M: AccessNodeMetadata,
 	A: AuthorApi<Hash, Hash>,
 	S: StfEnclaveSigning,
 	H: HandleState,
 > {
 	pub(crate) req: AssertionBuildRequest,
-	pub(crate) context: Arc<StfTaskContext<K, O, C, M, A, S, H>>,
+	pub(crate) context: Arc<StfTaskContext<K, A, S, H>>,
 }
 
-impl<K, O, C, M, A, S, H> TaskHandler for AssertionHandler<K, O, C, M, A, S, H>
+impl<K, A, S, H> TaskHandler for AssertionHandler<K, A, S, H>
 where
 	K: ShieldingCryptoDecrypt + ShieldingCryptoEncrypt + Clone,
-	O: EnclaveOnChainOCallApi,
-	C: CreateExtrinsics,
-	M: AccessNodeMetadata,
-	M::MetadataType: IMPCallIndexes + VCMPCallIndexes,
 	A: AuthorApi<Hash, Hash>,
 	S: StfEnclaveSigning,
 	H: HandleState,
 	H::StateT: SgxExternalitiesTrait,
 {
 	type Error = VCMPError;
-	type Result = Option<(Credential, AccountId)>;
+	type Result = ([u8; 32], [u8; 32], AesOutput); // (vc_index, vc_hash, encrypted_vc_str)
 
 	fn on_process(&self) -> Result<Self::Result, Self::Error> {
-		match self.req.assertion.clone() {
+		// create the initial credential
+		let mut credential = match self.req.assertion.clone() {
 			Assertion::A1 => lc_assertion_build::a1::build(
 				self.req.vec_identity.clone(),
 				&self.req.shard,
 				&self.req.who,
 				self.req.bn,
-			)
-			.map(|credential| Some((credential, self.req.who.clone()))),
+			),
 
 			Assertion::A2(guild_id) => lc_assertion_build::a2::build(
 				self.req.vec_identity.to_vec(),
@@ -79,8 +68,7 @@ where
 				&self.req.shard,
 				&self.req.who,
 				self.req.bn,
-			)
-			.map(|credential| Some((credential, self.req.who.clone()))),
+			),
 
 			Assertion::A3(guild_id, channel_id, role_id) => lc_assertion_build::a3::build(
 				self.req.vec_identity.to_vec(),
@@ -90,8 +78,7 @@ where
 				&self.req.shard,
 				&self.req.who,
 				self.req.bn,
-			)
-			.map(|credential| Some((credential, self.req.who.clone()))),
+			),
 
 			Assertion::A4(min_balance) => lc_assertion_build::a4::build(
 				self.req.vec_identity.to_vec(),
@@ -99,23 +86,22 @@ where
 				&self.req.shard,
 				&self.req.who,
 				self.req.bn,
-			)
-			.map(|credential| Some((credential, self.req.who.clone()))),
+			),
 
-			Assertion::A5(twitter_account, original_tweet_id) => lc_assertion_build::a5::build(
+			Assertion::A5(original_tweet_id) => lc_assertion_build::a5::build(
 				self.req.vec_identity.to_vec(),
-				twitter_account,
 				original_tweet_id,
-			)
-			.map(|_| None),
+				&self.req.shard,
+				&self.req.who,
+				self.req.bn,
+			),
 
 			Assertion::A6 => lc_assertion_build::a6::build(
 				self.req.vec_identity.to_vec(),
 				&self.req.shard,
 				&self.req.who,
 				self.req.bn,
-			)
-			.map(|credential| Some((credential, self.req.who.clone()))),
+			),
 
 			Assertion::A7(min_balance) => lc_assertion_build::a7::build(
 				self.req.vec_identity.to_vec(),
@@ -123,8 +109,7 @@ where
 				&self.req.shard,
 				&self.req.who,
 				self.req.bn,
-			)
-			.map(|credential| Some((credential, self.req.who.clone()))),
+			),
 
 			Assertion::A8(networks) => lc_assertion_build::a8::build(
 				self.req.vec_identity.to_vec(),
@@ -132,8 +117,7 @@ where
 				&self.req.shard,
 				&self.req.who,
 				self.req.bn,
-			)
-			.map(|credential| Some((credential, self.req.who.clone()))),
+			),
 
 			Assertion::A10(min_balance) => lc_assertion_build::a10::build(
 				self.req.vec_identity.to_vec(),
@@ -141,8 +125,7 @@ where
 				&self.req.shard,
 				&self.req.who,
 				self.req.bn,
-			)
-			.map(|credential| Some((credential, self.req.who.clone()))),
+			),
 
 			Assertion::A11(min_balance) => lc_assertion_build::a11::build(
 				self.req.vec_identity.to_vec(),
@@ -150,87 +133,102 @@ where
 				&self.req.shard,
 				&self.req.who,
 				self.req.bn,
-			)
-			.map(|credential| Some((credential, self.req.who.clone()))),
+			),
 
 			_ => {
 				unimplemented!()
 			},
-		}
+		}?;
+
+		// post-process the credential
+		let signer = self.context.enclave_signer.as_ref();
+		let enclave_account = signer.get_enclave_account().map_err(|e| {
+			VCMPError::RequestVCFailed(
+				self.req.assertion.clone(),
+				ErrorDetail::StfError(ErrorString::truncate_from(format!("{e:?}").into())),
+			)
+		})?;
+
+		let credential_endpoint = G_DATA_PROVIDERS.read().unwrap().credential_endpoint.clone();
+		credential.credential_subject.set_endpoint(credential_endpoint);
+
+		credential.issuer.id = account_id_to_string(&enclave_account);
+		let payload = credential.to_json().map_err(|_| {
+			VCMPError::RequestVCFailed(self.req.assertion.clone(), ErrorDetail::ParseError)
+		})?;
+		debug!("Credential payload: {}", payload);
+		let (enclave_account, sig) = signer.sign_vc_with_self(payload.as_bytes()).map_err(|e| {
+			VCMPError::RequestVCFailed(
+				self.req.assertion.clone(),
+				ErrorDetail::StfError(ErrorString::truncate_from(format!("{e:?}").into())),
+			)
+		})?;
+		debug!("Credential Payload signature: {:?}", sig);
+
+		credential.add_proof(&sig, credential.issuance_block_number, &enclave_account);
+		credential.validate().map_err(|e| {
+			VCMPError::RequestVCFailed(
+				self.req.assertion.clone(),
+				ErrorDetail::StfError(ErrorString::truncate_from(format!("{e:?}").into())),
+			)
+		})?;
+
+		let vc_index = credential.get_index().map_err(|e| {
+			VCMPError::RequestVCFailed(
+				self.req.assertion.clone(),
+				ErrorDetail::StfError(ErrorString::truncate_from(format!("{e:?}").into())),
+			)
+		})?;
+		let credential_str = credential.to_json().map_err(|_| {
+			VCMPError::RequestVCFailed(self.req.assertion.clone(), ErrorDetail::ParseError)
+		})?;
+		debug!("Credential: {}, length: {}", credential_str, credential_str.len());
+		let vc_hash = blake2_256(credential_str.as_bytes());
+		debug!("VC hash: {:?}", vc_hash);
+
+		let output = aes_encrypt_default(&self.req.key, credential_str.as_bytes());
+		Ok((vc_index, vc_hash, output))
 	}
 
 	fn on_success(&self, result: Self::Result) {
-		let (mut credential, who) = result.unwrap();
-		let signer = self.context.enclave_signer.as_ref();
-
-		let enclave_account = signer.get_enclave_account().unwrap();
-		credential.issuer.id = account_id_to_string(&enclave_account);
-
-		let payload = credential.to_json().unwrap();
-		debug!("	[Assertion] VC payload: {}", payload);
-
-		if let Ok((enclave_account, sig)) = signer.sign_vc_with_self(payload.as_bytes()) {
-			debug!("	[Assertion] Payload hash signature: {:?}", sig);
-
-			credential.add_proof(&sig, credential.issuance_block_number, &enclave_account);
-
-			if credential.validate().is_err() {
-				error!("failed to validate credential");
-				return
-			}
-
-			let key: UserShieldingKeyType = self.req.key;
-			if let Ok(vc_index) = credential.get_index() {
-				let credential_str = credential.to_json().unwrap();
-				debug!("Credential: {}, length: {}", credential_str, credential_str.len());
-
-				let vc_hash = blake2_256(credential_str.as_bytes());
-				debug!("	[Assertion] VC hash: {:?}", vc_hash);
-
-				let output = aes_encrypt_default(&key, credential_str.as_bytes());
-
-				match self
-					.context
-					.node_metadata
-					.get_from_metadata(|m| VCMPCallIndexes::vc_issued_call_indexes(m))
-				{
-					Ok(Ok(call_index)) => {
-						let call =
-							OpaqueCall::from_tuple(&(call_index, who, vc_index, vc_hash, output));
-						self.context.submit_to_parentchain(call)
-					},
-					Ok(Err(e)) => {
-						error!("failed to get metadata. Due to: {:?}", e);
-					},
-					Err(e) => {
-						error!("failed to get metadata. Due to: {:?}", e);
-					},
-				};
-			} else {
-				error!("failed to decode credential id");
-			}
+		debug!("Assertion build OK");
+		// we shouldn't have the maximum text length limit in normal RSA3072 encryption, as the payload
+		// using enclave's shielding key is encrypted in chunks
+		let (vc_index, vc_hash, vc_payload) = result;
+		if let Ok(enclave_signer) = self.context.enclave_signer.get_enclave_account() {
+			let c = TrustedCall::handle_vc_issued(
+				enclave_signer,
+				self.req.who.clone(),
+				self.req.assertion.clone(),
+				vc_index,
+				vc_hash,
+				vc_payload,
+				self.req.hash,
+			);
+			let _ = self
+				.context
+				.submit_trusted_call(&self.req.shard, &c)
+				.map_err(|e| error!("submit_trusted_call failed: {:?}", e));
 		} else {
-			error!("failed to sign credential");
+			error!("can't get enclave signer");
 		}
 	}
 
 	fn on_failure(&self, error: Self::Error) {
-		log::error!("occur an error while building assertion, due to:{:?}", error);
-		match self
-			.context
-			.node_metadata
-			.get_from_metadata(|m| VCMPCallIndexes::vcmp_some_error_call_indexes(m))
-		{
-			Ok(Ok(call_index)) => {
-				let call = OpaqueCall::from_tuple(&(call_index, error));
-				self.context.submit_to_parentchain(call)
-			},
-			Ok(Err(e)) => {
-				error!("failed to get metadata. Due to: {:?}", e);
-			},
-			Err(e) => {
-				error!("failed to get metadata. Due to: {:?}", e);
-			},
-		};
+		error!("Assertion build error: {error:?}");
+		if let Ok(enclave_signer) = self.context.enclave_signer.get_enclave_account() {
+			let c = TrustedCall::handle_vcmp_error(
+				enclave_signer,
+				Some(self.req.who.clone()),
+				error,
+				self.req.hash,
+			);
+			let _ = self
+				.context
+				.submit_trusted_call(&self.req.shard, &c)
+				.map_err(|e| error!("submit_trusted_call failed: {:?}", e));
+		} else {
+			error!("can't get enclave signer");
+		}
 	}
 }

@@ -20,18 +20,18 @@ compile_error!("feature \"std\" and feature \"sgx\" cannot be enabled at the sam
 #[cfg(all(not(feature = "std"), feature = "sgx"))]
 extern crate sgx_tstd as std;
 
-use crate::Result;
+use crate::*;
 use itp_stf_primitives::types::ShardIdentifier;
 use itp_types::AccountId;
 use itp_utils::stringify::account_id_to_string;
 use lc_credentials::Credential;
 use lc_data_providers::twitter_official::TwitterOfficialClient;
-use litentry_primitives::{Identity, ParentchainBlockNumber, VCMPError, Web2Network};
 use log::*;
-use std::vec::Vec;
+use std::{format, vec::Vec};
 
-const VC_SUBJECT_DESCRIPTION: &str = "User has at least X amount of followers";
-const VC_SUBJECT_TYPE: &str = "Total Twitter Followers";
+const VC_A6_SUBJECT_DESCRIPTION: &str = "The range of the user's Twitter follower count";
+const VC_A6_SUBJECT_TYPE: &str = "Twitter Follower Amount";
+const VC_A6_SUBJECT_TAG: [&str; 1] = ["Twitter"];
 
 /// Following ranges:
 ///
@@ -53,7 +53,7 @@ pub fn build(
 		identities
 	);
 
-	let mut client = TwitterOfficialClient::new();
+	let mut client = TwitterOfficialClient::v2();
 	let mut sum: u32 = 0;
 
 	for identity in identities {
@@ -67,7 +67,12 @@ pub fn build(
 						},
 					Err(e) => {
 						log::warn!("Assertion6 request error:{:?}", e);
-						return Err(VCMPError::Assertion6Failed)
+						return Err(Error::RequestVCFailed(
+							Assertion::A6,
+							ErrorDetail::StfError(ErrorString::truncate_from(
+								format!("{:?}", e).into(),
+							)),
+						))
 					},
 				}
 			}
@@ -75,8 +80,8 @@ pub fn build(
 	}
 
 	info!("sum followers: {}", sum);
-	let min: u64;
-	let max: u64;
+	let min: u32;
+	let max: u32;
 
 	match sum {
 		0 | 1 => {
@@ -101,20 +106,24 @@ pub fn build(
 		},
 		100001..=u32::MAX => {
 			min = 100000;
-			max = u64::MAX;
+			max = u32::MAX;
 		},
 	}
 
 	match Credential::new_default(who, &shard.clone(), bn) {
 		Ok(mut credential_unsigned) => {
-			credential_unsigned.add_subject_info(VC_SUBJECT_DESCRIPTION, VC_SUBJECT_TYPE);
+			credential_unsigned.add_subject_info(
+				VC_A6_SUBJECT_DESCRIPTION,
+				VC_A6_SUBJECT_TYPE,
+				VC_A6_SUBJECT_TAG.to_vec(),
+			);
 			credential_unsigned.add_assertion_a6(min, max);
 
-			return Ok(credential_unsigned)
+			Ok(credential_unsigned)
 		},
 		Err(e) => {
 			error!("Generate unsigned credential failed {:?}", e);
+			Err(Error::RequestVCFailed(Assertion::A6, e.into_error_detail()))
 		},
 	}
-	Err(VCMPError::Assertion6Failed)
 }

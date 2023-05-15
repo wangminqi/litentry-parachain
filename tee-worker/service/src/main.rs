@@ -20,6 +20,9 @@
 #[cfg(feature = "teeracle")]
 use crate::teeracle::start_interval_market_update;
 
+#[cfg(not(feature = "dcap"))]
+use crate::utils::check_files;
+
 use crate::{
 	account_funding::{setup_account_funding, EnclaveAccountInfoProvider},
 	config::Config,
@@ -35,11 +38,11 @@ use crate::{
 	prometheus_metrics::{start_metrics_server, EnclaveMetricsReceiver, MetricsHandler},
 	sidechain_setup::{sidechain_init_block_production, sidechain_start_untrusted_rpc_server},
 	sync_block_broadcaster::SyncBlockBroadcaster,
-	utils::{check_files, extract_shard},
+	utils::extract_shard,
 	worker::Worker,
 	worker_peers_updater::WorkerPeersUpdater,
 };
-use base58::{FromBase58, ToBase58};
+use base58::ToBase58;
 use clap::{load_yaml, App};
 use codec::{Decode, Encode};
 use enclave::{
@@ -83,6 +86,10 @@ use litentry_primitives::{ChallengeCode, Identity, ParentchainHeader as Header};
 use log::*;
 use serde_json::Value;
 use sgx_types::*;
+
+#[cfg(feature = "dcap")]
+use sgx_verify::extract_tcb_info_from_raw_dcap_quote;
+
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use sp_keyring::AccountKeyring;
 use std::{
@@ -194,6 +201,9 @@ fn main() {
 		let enclave = enclave.clone();
 		let trusted_server_url = format!("wss://localhost:{}", config.trusted_worker_port);
 		let base58_enclave = enclave.get_mrenclave().unwrap().encode().to_base58();
+		let mock_server_port = config
+			.try_parse_mock_server_port()
+			.expect("mock server port to be a valid port number");
 		thread::spawn(move || {
 			info!("*** Starting mock server");
 			let getter = Arc::new(move |account: &AccountId32, identity: &Identity| {
@@ -254,7 +264,7 @@ fn main() {
 					},
 				}
 			});
-			let _ = lc_mock_server::run(getter, config.mock_server_port);
+			let _ = lc_mock_server::run(getter, mock_server_port);
 		});
 	}
 
@@ -305,16 +315,17 @@ fn main() {
 		setup::generate_shielding_key_file(enclave.as_ref());
 	} else if matches.is_present("signing-key") {
 		setup::generate_signing_key_file(enclave.as_ref());
+		let tee_accountid = enclave_account(enclave.as_ref());
+		println!("Enclave account: {:}", &tee_accountid.to_ss58check());
 	} else if matches.is_present("dump-ra") {
 		info!("*** Perform RA and dump cert to disk");
 		#[cfg(not(feature = "dcap"))]
 		enclave.dump_ias_ra_cert_to_disk().unwrap();
 		#[cfg(feature = "dcap")]
 		{
-			// Hard coded 6-byte FMSPC that represents the state of devsgx03
-			// TODO: either fetch this value from a list of pre-configured FMSPC values or
-			// extract the information out of the RA certificate
-			let fmspc = [00u8, 0x90, 0x6E, 0xA1, 00, 00];
+			let skip_ra = false;
+			let dcap_quote = enclave.generate_dcap_ra_quote(skip_ra).unwrap();
+			let (fmspc, _tcb_info) = extract_tcb_info_from_raw_dcap_quote(&dcap_quote).unwrap();
 			enclave.dump_dcap_collateral_to_disk(fmspc).unwrap();
 			enclave.dump_dcap_ra_cert_to_disk().unwrap();
 		}
@@ -358,9 +369,9 @@ fn main() {
 		let old_shard = sub_matches
 			.value_of("old-shard")
 			.map(|value| {
-				let shard_vec = value.from_base58().expect("shard must be hex encoded");
 				let mut shard = [0u8; 32];
-				shard.copy_from_slice(&shard_vec[..]);
+				hex::decode_to_slice(value, &mut shard)
+					.expect("shard must be hex encoded without 0x");
 				ShardIdentifier::from_slice(&shard)
 			})
 			.unwrap();
@@ -368,9 +379,9 @@ fn main() {
 		let new_shard: ShardIdentifier = sub_matches
 			.value_of("new-shard")
 			.map(|value| {
-				let shard_vec = value.from_base58().expect("shard must be hex encoded");
 				let mut shard = [0u8; 32];
-				shard.copy_from_slice(&shard_vec[..]);
+				hex::decode_to_slice(value, &mut shard)
+					.expect("shard must be hex encoded without 0x");
 				ShardIdentifier::from_slice(&shard)
 			})
 			.unwrap();
@@ -418,6 +429,7 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	// ------------------------------------------------------------------------
 	// check for required files
 	if !skip_ra {
+		#[cfg(not(feature = "dcap"))]
 		check_files();
 	}
 	// ------------------------------------------------------------------------
@@ -524,6 +536,7 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 		.unwrap(),
 	);
 	let last_synced_header = parentchain_handler.init_parentchain_components().unwrap();
+	info!("Last synced parachain block = {:?}", &last_synced_header.number);
 	let nonce = node_api.get_nonce_of(&tee_accountid).unwrap();
 	info!("Enclave nonce = {:?}", nonce);
 	enclave
@@ -540,11 +553,26 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 		.expect("Could not set the node metadata in the enclave");
 
 	#[cfg(feature = "dcap")]
-	register_collateral(&node_api, &*enclave, &tee_accountid, is_development_mode);
+	register_collateral(&node_api, &*enclave, &tee_accountid, is_development_mode, skip_ra);
+
+	let trusted_url = config.trusted_worker_url_external();
+	#[cfg(feature = "dcap")]
+	let marblerun_base_url =
+		run_config.marblerun_base_url.unwrap_or("http://localhost:9944".to_owned());
+
+	#[cfg(feature = "dcap")]
+	fetch_marblerun_events_every_hour(
+		node_api.clone(),
+		enclave.clone(),
+		tee_accountid.clone(),
+		is_development_mode,
+		trusted_url.clone(),
+		marblerun_base_url.clone(),
+	);
 
 	// ------------------------------------------------------------------------
 	// Perform a remote attestation and get an unchecked extrinsic back.
-	let trusted_url = config.trusted_worker_url_external();
+
 	if skip_ra {
 		println!(
 			"[!] skipping remote attestation. Registering enclave without attestation report."
@@ -652,11 +680,19 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	}
 
 	if WorkerModeProvider::worker_mode() != WorkerMode::Teeracle {
+		let parentchain_start_block = config
+			.try_parse_parentchain_start_block()
+			.expect("parentchain start block to be a valid number");
 		println!("*** [+] Finished syncing light client, syncing parentchain...");
+		println!(
+			"*** [+] last_synced_header: {}, config.parentchain_start_block: {}",
+			last_synced_header.number, parentchain_start_block
+		);
 
 		// Syncing all parentchain blocks, this might take a while..
-		let mut last_synced_header =
-			parentchain_handler.sync_parentchain(last_synced_header).unwrap();
+		let mut last_synced_header = parentchain_handler
+			.sync_parentchain(last_synced_header, parentchain_start_block)
+			.unwrap();
 
 		// ------------------------------------------------------------------------
 		// Initialize the sidechain
@@ -668,6 +704,7 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 				parentchain_handler.clone(),
 				sidechain_storage,
 				&last_synced_header,
+				parentchain_start_block,
 			)
 			.unwrap();
 		}
@@ -677,7 +714,12 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 		thread::Builder::new()
 			.name("parentchain_sync_loop".to_owned())
 			.spawn(move || {
-				subscribe_to_parentchain_new_headers(parentchain_handler, last_synced_header);
+				if let Err(e) =
+					subscribe_to_parentchain_new_headers(parentchain_handler, last_synced_header)
+				{
+					error!("Parentchain block syncing terminated with a failure: {:?}", e);
+				}
+				println!("[!] Parentchain block syncing has terminated");
 			})
 			.unwrap();
 	}
@@ -690,32 +732,25 @@ fn start_worker<E, T, D, InitializationHandler, WorkerModeProvider>(
 	// ------------------------------------------------------------------------
 	// subscribe to events and react on firing
 	println!("*** Subscribing to events");
-	loop {
-		let (sender, receiver) = channel();
-		let metadata = node_api.metadata.clone();
-		let node_api2 = node_api.clone();
-		let _ = thread::Builder::new()
-			.name("event_subscriber".to_owned())
-			.spawn(move || {
-				node_api2.subscribe_events(sender).unwrap();
-			})
-			.unwrap();
+	let (sender, receiver) = channel();
+	let metadata = node_api.metadata.clone();
+	let _ = thread::Builder::new()
+		.name("event_subscriber".to_owned())
+		.spawn(move || {
+			node_api.subscribe_events(sender).unwrap();
+		})
+		.unwrap();
 
-		println!("[+] Subscribed to events. waiting...");
-		loop {
-			match receiver.recv() {
-				Ok(events_str) => {
-					let event_bytes = Vec::from_hex(events_str).unwrap();
-					let events = Events::new(metadata.clone(), Default::default(), event_bytes);
-					for maybe_event_details in events.iter() {
-						let event_details = maybe_event_details.unwrap();
-						let _ = print_event(&event_details);
-					}
-				},
-				Err(_) => {
-					println!("[!] event websocket disconnected, try to connect again");
-					break
-				},
+	println!("[+] Subscribed to events. waiting...");
+	let timeout = Duration::from_secs(600);
+	loop {
+		if let Ok(events_str) = receiver.recv_timeout(timeout) {
+			let event_bytes = Vec::from_hex(events_str).unwrap();
+			let events = Events::new(metadata.clone(), Default::default(), event_bytes);
+
+			for maybe_event_details in events.iter() {
+				let event_details = maybe_event_details.unwrap();
+				let _ = print_event(&event_details);
 			}
 		}
 	}
@@ -744,19 +779,82 @@ fn spawn_worker_for_shard_polling<InitializationHandler>(
 				println!("[+] Found `WorkerForShard` on parentchain state");
 				break
 			}
-			thread::sleep(Duration::from_secs(POLL_INTERVAL_SECS));
+			sleep(Duration::from_secs(POLL_INTERVAL_SECS));
 		}
 	});
 }
 
+#[cfg(feature = "dcap")]
+fn fetch_marblerun_events_every_hour<E>(
+	api: ParentchainApi,
+	enclave: Arc<E>,
+	accountid: AccountId32,
+	is_development_mode: bool,
+	url: String,
+	marblerun_base_url: String,
+) where
+	E: RemoteAttestation + Clone + Sync + Send + 'static,
+{
+	let enclave = enclave.clone();
+	let handle = thread::spawn(move || {
+		const POLL_INTERVAL_5_MINUTES_IN_SECS: u64 = 5 * 60;
+		loop {
+			info!("Polling marblerun events for quotes to register");
+			register_quotes_from_marblerun(
+				&api,
+				enclave.clone(),
+				&accountid,
+				is_development_mode,
+				url.clone(),
+				marblerun_base_url.clone(),
+			);
+
+			thread::sleep(Duration::from_secs(POLL_INTERVAL_5_MINUTES_IN_SECS));
+		}
+	});
+
+	handle.join().unwrap()
+}
+#[cfg(feature = "dcap")]
+fn register_quotes_from_marblerun(
+	api: &ParentchainApi,
+	enclave: Arc<dyn RemoteAttestation>,
+	accountid: &AccountId32,
+	is_development_mode: bool,
+	url: String,
+	marblerun_base_url: String,
+) {
+	let enclave = enclave.as_ref();
+	let events = prometheus_metrics::fetch_marblerun_events(&marblerun_base_url)
+		.map_err(|e| {
+			info!("Fetching events from Marblerun failed with: {:?}, continuing with 0 events.", e);
+		})
+		.unwrap_or_default();
+	let quotes: Vec<&[u8]> =
+		events.iter().map(|event| event.get_quote_without_prepended_bytes()).collect();
+
+	for quote in quotes {
+		match enclave.generate_dcap_ra_extrinsic_from_quote(url.clone(), &quote) {
+			Ok(xts) => {
+				send_extrinsic(&xts, api, accountid, is_development_mode);
+			},
+			Err(e) => {
+				error!("Extracting information from quote failed: {}", e)
+			},
+		}
+	}
+}
 #[cfg(feature = "dcap")]
 fn register_collateral(
 	api: &ParentchainApi,
 	enclave: &dyn RemoteAttestation,
 	accountid: &AccountId32,
 	is_development_mode: bool,
+	skip_ra: bool,
 ) {
-	let fmspc = [00u8, 0x90, 0x6E, 0xA1, 00, 00];
+	let dcap_quote = enclave.generate_dcap_ra_quote(skip_ra).unwrap();
+	let (fmspc, _tcb_info) = extract_tcb_info_from_raw_dcap_quote(&dcap_quote).unwrap();
+
 	let uxt = enclave.generate_register_quoting_enclave_extrinsic(fmspc).unwrap();
 	send_extrinsic(&uxt, api, accountid, is_development_mode);
 
@@ -790,39 +888,37 @@ fn send_extrinsic(
 fn subscribe_to_parentchain_new_headers<E: EnclaveBase + Sidechain>(
 	parentchain_handler: Arc<ParentchainHandler<ParentchainApi, E>>,
 	mut last_synced_header: Header,
-) {
+) -> Result<(), Error> {
+	let (sender, receiver) = channel();
+	//TODO: this should be implemented by parentchain_handler directly, and not via
+	// exposed parentchain_api. Blocked by https://github.com/scs/substrate-api-client/issues/267.
+	parentchain_handler
+		.parentchain_api()
+		.subscribe_finalized_heads(sender)
+		.map_err(Error::ApiClient)?;
+
+	// TODO(Kai@Litentry):
+	// originally we had an outer loop to try to handle the disconnection,
+	// see https://github.com/litentry/litentry-parachain/commit/b8059d0fad928e4bba99178451cd0d473791c437
+	// but I reverted it because:
+	// - no graceful shutdown, we could have many mpsc channel when it doesn't go right
+	// - we might have multiple `sync_parentchain` running concurrently, which causes chaos in enclave side
+	// - I still feel it's only a workaround, not a perfect solution
+	//
+	// TODO: now the sync will panic if disconnected - it heavily relys on the worker-restart to work (even manually)
 	loop {
-		let (sender, receiver) = channel();
-		if let Err(e) = parentchain_handler.parentchain_api().subscribe_finalized_heads(sender) {
-			println!("[!] connect ws error: {e:?}");
-			sleep(Duration::from_secs(1));
-			break
-		}
-		loop {
-			match receiver.recv() {
-				Ok(header_str) => {
-					let new_header: Header = serde_json::from_str(&header_str).unwrap();
-					println!(
-						"[+] Received finalized header update ({}), syncing parent chain...",
-						new_header.number
-					);
-					match parentchain_handler.sync_parentchain(last_synced_header.clone()) {
-						Err(e) => {
-							println!(
-								"[!] sync parentchain error: {e:?}, websocket try to reconnect"
-							);
-							break
-						},
-						Ok(h) => last_synced_header = h,
-					}
-				},
-				Err(_) => {
-					println!("[!] sync parachain websocket disconnected, try to reconnect.");
-					sleep(Duration::from_secs(1));
-					break
-				},
-			};
-		}
+		let new_header: Header = match receiver.recv() {
+			Ok(header_str) => serde_json::from_str(&header_str).map_err(Error::Serialization),
+			Err(e) => Err(Error::ApiSubscriptionDisconnected(e)),
+		}?;
+
+		println!(
+			"[+] Received finalized header update ({}), syncing parent chain...",
+			new_header.number
+		);
+
+		// the overriden_start_block shouldn't matter here
+		last_synced_header = parentchain_handler.sync_parentchain(last_synced_header, 0)?;
 	}
 }
 
@@ -866,8 +962,13 @@ fn data_provider(config: &Config) -> DataProvidersStatic {
 	if let Ok(v) = env::var("TWITTER_LITENTRY_URL") {
 		data_provider_config.set_twitter_litentry_url(v);
 	}
-	if let Ok(v) = env::var("TWITTER_AUTH_TOKEN") {
-		data_provider_config.set_twitter_auth_token(v);
+	// Bearer Token is as same as App only Access Token on Twitter (https://developer.twitter.com/en/docs/authentication/oauth-2-0/application-only),
+	// that is for developers that just need read-only access to public information.
+	if let Ok(v) = env::var("TWITTER_AUTH_TOKEN_V1_1") {
+		data_provider_config.set_twitter_auth_token_v1_1(v);
+	}
+	if let Ok(v) = env::var("TWITTER_AUTH_TOKEN_V2") {
+		data_provider_config.set_twitter_auth_token_v2(v);
 	}
 	if let Ok(v) = env::var("DISCORD_OFFICIAL_URL") {
 		data_provider_config.set_discord_official_url(v);
@@ -884,5 +985,9 @@ fn data_provider(config: &Config) -> DataProvidersStatic {
 	if let Ok(v) = env::var("GRAPHQL_AUTH_KEY") {
 		data_provider_config.set_graphql_auth_key(v);
 	}
+	if let Ok(v) = env::var("CREDENTIAL_ENDPOINT") {
+		data_provider_config.set_credential_endpoint(v);
+	}
+
 	data_provider_config
 }
