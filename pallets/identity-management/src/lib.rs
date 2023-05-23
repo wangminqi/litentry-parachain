@@ -68,6 +68,12 @@ pub mod pallet {
 		type DelegateeAdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 		// origin that is allowed to call extrinsics
 		type ExtrinsicWhitelistOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
+		/// maximum metadata length
+		#[pallet::constant]
+		type MaxMetadataLength: Get<u32>;
+		/// maximum number of identities an account can have, if you change this value to lower some accounts may exceed this limit
+		#[pallet::constant]
+		type MaxIDGraphLength: Get<u32>;
 	}
 
 	#[pallet::event]
@@ -159,6 +165,32 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn delegatee)]
 	pub type Delegatee<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, (), OptionQuery>;
+
+
+	#[pallet::storage]
+	#[pallet::getter(fn max_id_graph_length)]
+	pub type MaxIDGraphLength<T> = StorageValue<_, u32, ValueQuery>;
+
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig {
+		pub max_id_graph_length: u32,
+	}
+
+	#[cfg(feature = "std")]
+	impl Default for GenesisConfig {
+		fn default() -> Self {
+			Self { max_id_graph_length: 64 }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		fn build(&self) {
+			MaxIDGraphLength::<T>::put(self.max_id_graph_length);
+		}
+	}
+
 
 	#[pallet::error]
 	pub enum Error<T> {

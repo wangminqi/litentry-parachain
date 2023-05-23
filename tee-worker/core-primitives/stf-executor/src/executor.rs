@@ -46,6 +46,7 @@ use std::{
 	boxed::Box, collections::BTreeMap, fmt::Debug, marker::PhantomData, sync::Arc, time::Duration,
 	vec::Vec,
 };
+use itp_storage::storage_value_key;
 
 pub struct StfExecutor<OCallApi, StateHandler, NodeMetadataRepository, Stf> {
 	ocall_api: Arc<OCallApi>,
@@ -122,6 +123,21 @@ where
 		//       cannot infer type for type parameter `NodeMetadataRepository` declared on the trait `ExecuteCall`
 		let trusted_call_executor: Box<dyn ExecuteCall<NodeMetadataRepository, Error = StfError>> = Box::new(trusted_call.clone());
 		let storage_hashes = trusted_call_executor.get_storage_hashes_to_update();
+
+
+		info!("Getting maxgraphlengh!");
+
+		let mut key_hashes = Vec::new();
+		key_hashes.push(storage_value_key("IdentityManagement","MaxIDGraphLength"));
+
+		let result: Vec<StorageEntryVerified<u32>> = self.ocall_api.get_multiple_storages_verified(key_hashes, header).unwrap();
+
+		result.iter().for_each(|se| {
+			info!("Got value: {:?}", se.value.unwrap());
+		});
+
+
+
 		let update_map = self
 			.ocall_api
 			.get_multiple_storages_verified(storage_hashes, header)

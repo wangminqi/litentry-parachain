@@ -5536,6 +5536,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex 0.4.3",
+ "itp-storage",
  "litentry-primitives",
  "log 0.4.17",
  "pallet-balances",

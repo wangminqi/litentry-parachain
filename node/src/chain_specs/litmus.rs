@@ -19,7 +19,7 @@ use cumulus_primitives_core::ParaId;
 use litmus_parachain_runtime::{
 	AccountId, AuraId, Balance, BalancesConfig, CollatorSelectionConfig, CouncilMembershipConfig,
 	GenesisConfig, ParachainInfoConfig, PolkadotXcmConfig, SessionConfig, SystemConfig,
-	TechnicalCommitteeMembershipConfig, TeerexConfig, VCManagementConfig, UNIT, WASM_BINARY,
+	TechnicalCommitteeMembershipConfig, TeerexConfig, VCManagementConfig, UNIT, WASM_BINARY, IdentityManagementConfig
 };
 use sc_service::ChainType;
 use sc_telemetry::TelemetryEndpoints;
@@ -241,5 +241,6 @@ fn generate_genesis(
 		vc_management: VCManagementConfig { admin: None },
 		transaction_payment: Default::default(),
 		tokens: Default::default(),
+		identity_management: IdentityManagementConfig { max_id_graph_length: 64 }
 	}
 }

@@ -20,7 +20,7 @@ use rococo_parachain_runtime::{
 	AccountId, AuraId, Balance, BalancesConfig, CouncilMembershipConfig, GenesisConfig,
 	ParachainInfoConfig, ParachainStakingConfig, PolkadotXcmConfig, SessionConfig, SudoConfig,
 	SystemConfig, TechnicalCommitteeMembershipConfig, TeerexConfig, VCManagementConfig, UNIT,
-	WASM_BINARY,
+	WASM_BINARY, IdentityManagementConfig
 };
 use sc_service::ChainType;
 use sc_telemetry::TelemetryEndpoints;
@@ -241,5 +241,6 @@ fn generate_genesis(
 		vc_management: VCManagementConfig { admin: Some(root_key) },
 		transaction_payment: Default::default(),
 		tokens: Default::default(),
+		identity_management: IdentityManagementConfig { max_id_graph_length: 64 }
 	}
 }

@@ -55,6 +55,7 @@ pub mod pallet {
 	use super::*;
 	use litentry_primitives::Address32;
 	use log::warn;
+	use itp_storage::storage_value_key;
 
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
 
@@ -75,9 +76,6 @@ pub mod pallet {
 		/// maximum delay in block numbers between creating an identity and verifying an identity
 		#[pallet::constant]
 		type MaxVerificationDelay: Get<ParentchainBlockNumber>;
-		/// maximum number of identities an account can have, if you change this value to lower some accounts may exceed this limit
-		#[pallet::constant]
-		type MaxIDGraphLength: Get<u32>;
 	}
 
 	#[pallet::event]
@@ -327,6 +325,14 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+
+		pub fn get_max_id_graph_length() -> u32 {
+			//todo: extract values
+			let key = storage_value_key("IdentityManagement","MaxIDGraphLength");
+			let value: u32 = storage::unhashed::get(&key).unwrap_or(10);
+			value
+		}
+
 		fn insert_identity_with_limit(
 			owner: &T::AccountId,
 			identity: &Identity,
@@ -334,7 +340,7 @@ pub mod pallet {
 		) -> Result<(), DispatchError> {
 			IDGraphLens::<T>::try_mutate(owner, |len| {
 				let new_len = len.checked_add(1).ok_or(Error::<T>::IDGraphLenLimitReached)?;
-				if new_len > T::MaxIDGraphLength::get() {
+				if new_len > Self::get_max_id_graph_length() {
 					return Err(Error::<T>::IDGraphLenLimitReached.into())
 				}
 				*len = new_len;

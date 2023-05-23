@@ -26,6 +26,7 @@ serde_derive = { version = "1.0", default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
 litentry-primitives = { path = "../../primitives", default-features = false }
+itp-storage = { path = "../../../core-primitives/storage", default-features = false }
 
 [dev-dependencies]
 pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.39", default-features = false }
@@ -47,4 +48,5 @@ std = [
     "serde_json/std",
     "pallet-balances/std",
     "litentry-primitives/std",
+    "itp-storage/std",
 ]

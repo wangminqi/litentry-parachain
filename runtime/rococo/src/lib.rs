@@ -900,6 +900,8 @@ impl pallet_identity_management::Config for Runtime {
 	type TEECallOrigin = EnsureEnclaveSigner<Runtime>;
 	type DelegateeAdminOrigin = EnsureRootOrAllCouncil;
 	type ExtrinsicWhitelistOrigin = IMPExtrinsicWhitelist;
+	type MaxMetadataLength = ConstU32<128>;
+	type MaxIDGraphLength = ConstU32<64>;
 }
 
 impl pallet_group::Config<IMPExtrinsicWhitelistInstance> for Runtime {

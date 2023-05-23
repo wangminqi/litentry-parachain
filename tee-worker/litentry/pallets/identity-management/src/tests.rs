@@ -76,7 +76,7 @@ fn create_identity_works() {
 #[test]
 fn cannot_create_more_identities_for_account_than_limit() {
 	new_test_ext(true).execute_with(|| {
-		let max_id_graph_len = <<Test as crate::Config>::MaxIDGraphLength as Get<u32>>::get();
+		let max_id_graph_len = 32;
 		for i in 1..max_id_graph_len {
 			assert_ok!(IMT::create_identity(
 				RuntimeOrigin::signed(ALICE),

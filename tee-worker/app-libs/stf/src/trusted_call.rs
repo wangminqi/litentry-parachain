@@ -46,6 +46,7 @@ use std::{format, prelude::v1::*, sync::Arc};
 
 #[cfg(feature = "evm")]
 use ita_sgx_runtime::{AddressMapping, HashedAddressMapping};
+use itp_storage::storage_value_key;
 use itp_types::{MrEnclave, SidechainBlockNumber};
 use lc_scheduled_enclave::{ScheduledEnclaveUpdater, GLOBAL_SCHEDULED_ENCLAVE};
 
@@ -745,7 +746,8 @@ where
 	}
 
 	fn get_storage_hashes_to_update(&self) -> Vec<Vec<u8>> {
-		let key_hashes = Vec::new();
+		let mut key_hashes = Vec::new();
+		key_hashes.push(storage_value_key("IdentityManagement","MaxIDGraphLength"));
 		match self.call {
 			TrustedCall::balance_set_balance(..) => debug!("No storage updates needed..."),
 			TrustedCall::balance_transfer(..) => debug!("No storage updates needed..."),
