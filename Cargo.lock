@@ -1204,7 +1204,7 @@ version = "0.9.12"
 dependencies = [
  "frame-support 4.0.0-dev (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.39)",
  "parity-scale-codec",
- "ring 0.16.20 (git+https://github.com/Niederb/ring-xous.git?branch=0.16.20-cleanup)",
+ "ring 0.16.20 (registry+https://github.com/rust-lang/crates.io-index)",
  "scale-info",
  "sp-core 7.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.39)",
  "sp-runtime 7.0.0 (git+https://github.com/paritytech/substrate?branch=polkadot-v0.9.39)",
